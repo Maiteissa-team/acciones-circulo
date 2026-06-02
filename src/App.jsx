@@ -527,13 +527,25 @@ function GuardianaView({ session, onExit }) {
   if (filter === "done") filteredActions = actions.filter(a=>a.completed);
   if (weekFilter !== "all") filteredActions = filteredActions.filter(a => getWeekLabel(a.action_date) === weekFilter);
 
-  // Group by member
+  // Group by member — only show members with actions matching the current filter.
+  // Exception: in "all" view with no week filter, also show members with zero actions
+  // so the guardiana can see who hasn't submitted anything yet.
   const byMember = {};
-  members.forEach(m => { byMember[m.id] = { member: m, actions: [] }; });
   filteredActions.forEach(a => {
-    if (byMember[a.member_id]) byMember[a.member_id].actions.push(a);
-    else byMember[a.member_id] = { member: { id: a.member_id, name: a.member_name }, actions: [a] };
+    if (!byMember[a.member_id]) {
+      const fullMember = members.find(m => m.id === a.member_id);
+      byMember[a.member_id] = {
+        member: fullMember || { id: a.member_id, name: a.member_name },
+        actions: []
+      };
+    }
+    byMember[a.member_id].actions.push(a);
   });
+  if (filter === "all" && weekFilter === "all") {
+    members.forEach(m => {
+      if (!byMember[m.id]) byMember[m.id] = { member: m, actions: [] };
+    });
+  }
 
   // Group member's actions by week
   const groupByWeek = (acts) => {
