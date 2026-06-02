@@ -672,7 +672,7 @@ function GoalSection({ member, groupId }) {
       <div className="page-header" style={{marginBottom:20}}>
         <div className="page-eyebrow">Mi propósito</div>
         <div className="page-title">Objetivos de Manifestadora Experta</div>
-        <div className="page-sub">Un objetivo por alumna. Claro, poderoso y compartido con el grupo.</div>
+        <div className="page-sub">Comparte tu objetivo claro y poderoso con el grupo.</div>
       </div>
 
       {/* MY GOAL */}
@@ -738,6 +738,18 @@ function GoalSection({ member, groupId }) {
       {allGoals.length === 0 && myGoal?.goal_text && (
         <div style={{textAlign:"center",padding:"32px 0",border:"1px dashed rgba(184,150,12,0.2)"}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"rgba(30,20,8,0.3)",fontStyle:"italic"}}>Aún no hay objetivos de otras compañeras</div>
+        </div>
+      )}
+
+      {/* Motivational message */}
+      {myGoal?.goal_text && (
+        <div style={{marginTop:28,padding:"22px 28px",background:"#0A0A0A",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,right:0,fontFamily:"'Cormorant Garamond',serif",fontSize:80,color:"rgba(184,150,12,0.06)",lineHeight:1,pointerEvents:"none",userSelect:"none"}}>✦</div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:4,color:"rgba(184,150,12,0.6)",textTransform:"uppercase",marginBottom:10}}>Recuerda</div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:"rgba(255,255,255,0.85)",lineHeight:1.75,fontStyle:"italic",position:"relative",zIndex:1}}>
+            Este es tu compromiso contigo misma.<br/>
+            <span style={{color:"#B8960C"}}>Cada acción que tomas desde hoy te acerca un paso más a vivir la vida que ya sabes que es para ti.</span>
+          </div>
         </div>
       )}
     </div>
