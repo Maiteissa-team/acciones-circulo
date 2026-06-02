@@ -266,7 +266,11 @@ function EditModal({ action, onSave, onClose }) {
 // ─── ExportModal ─────────────────────────────────────────
 function ExportModal({ group, actions, members, onClose }) {
   const weekLabel = getWeekLabel(new Date().toISOString().split("T")[0]);
-  const thisWeek = actions.filter(a => getWeekLabel(a.action_date) === "Esta semana");
+  // Include actions due this week OR completed this week
+  const thisWeek = actions.filter(a =>
+    getWeekLabel(a.action_date) === "Esta semana" ||
+    (a.completed && a.completed_at && getWeekLabel(a.completed_at.split("T")[0]) === "Esta semana")
+  );
   const byMember = {};
   members.forEach(m => { byMember[m.id] = { name: m.name, actions: [] }; });
   thisWeek.forEach(a => { if (byMember[a.member_id]) byMember[a.member_id].actions.push(a); });
@@ -282,7 +286,13 @@ function ExportModal({ group, actions, members, onClose }) {
     const done = acts.filter(a=>a.completed).length;
     lines.push(`${name} (${done}/${acts.length} completadas)`);
     if (acts.length === 0) { lines.push("  · Sin acciones esta semana"); }
-    else acts.forEach(a => lines.push(`  ${a.completed?"✓":"○"} ${a.action_text} [${a.action_date}]`));
+    else acts.forEach(a => {
+      const completedInfo = a.completed && a.completed_at
+        ? ` ✓ completada el ${new Date(a.completed_at).toLocaleDateString("es-ES")}`
+        : "";
+      const prefix = a.completed ? "✓" : "○";
+      lines.push(`  ${prefix} ${a.action_text} [límite: ${a.action_date}${completedInfo}]`);
+    });
     lines.push("");
   });
   lines.push(`${"─".repeat(50)}`);
@@ -310,8 +320,14 @@ function ExportModal({ group, actions, members, onClose }) {
 
 // ─── QuickViewModal ──────────────────────────────────────
 function QuickViewModal({ actions, members, onClose }) {
-  const thisWeek = actions.filter(a => getWeekLabel(a.action_date) === "Esta semana"
-    || getWeekLabel(a.action_date) === "Semana pasada");
+  // Show actions that are relevant this week or last week:
+  // - action_date falls this/last week, OR
+  // - completed_at falls this/last week (completed early or late)
+  const relevantWeeks = ["Esta semana", "Semana pasada"];
+  const thisWeek = actions.filter(a =>
+    relevantWeeks.includes(getWeekLabel(a.action_date)) ||
+    (a.completed && a.completed_at && relevantWeeks.includes(getWeekLabel(a.completed_at.split("T")[0])))
+  );
   const byMember = {};
   members.forEach(m => { byMember[m.id] = { name: m.name, actions: [] }; });
   thisWeek.forEach(a => { if (byMember[a.member_id]) byMember[a.member_id].actions.push(a); });
