@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL  = "https://ymxrybldumxnnsebzjhy.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlteHJ5YmxkdW14bm5zZWJ6amh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjU5ODMsImV4cCI6MjA5NTkwMTk4M30.EzNrqLOinF8KvczfDAkZVmTSe9AoxZYLucI4b4fbHjk";
-const ADMIN_CODE      = "ESTEFANY2026";
-const GUARDIANA_CODE  = "GUARDIANAS2026"; // ← change this anytime
-const supabase        = createClient(SUPABASE_URL, SUPABASE_KEY);
+const ADMIN_CODE     = "ESTEFANY2026";
+const GUARDIANA_CODE = "GUARDIANAS2026";
+const supabase       = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── helpers ────────────────────────────────────────────
 function getWeekLabel(dateStr) {
@@ -21,6 +21,27 @@ function getWeekLabel(dateStr) {
   if (diff === 1) return "Próxima semana";
   const months = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
   return `Semana del ${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+function daysSince(isoStr) {
+  if (!isoStr) return 999;
+  return Math.floor((Date.now() - new Date(isoStr).getTime()) / (1000*3600*24));
+}
+
+function isOverdue(dateStr, completed) {
+  if (completed || !dateStr) return false;
+  return new Date(dateStr) < new Date(new Date().toDateString());
+}
+
+function streak(actions) {
+  // Count consecutive weeks (ending today) where member added at least one action
+  if (!actions.length) return 0;
+  const startOfWeek = (dt) => { const d = new Date(dt); d.setDate(d.getDate() - d.getDay() + 1); d.setHours(0,0,0,0); return d.getTime(); };
+  const weeksWithAction = new Set(actions.map(a => startOfWeek(new Date(a.created_at))));
+  let count = 0;
+  let cur = startOfWeek(new Date());
+  while (weeksWithAction.has(cur)) { count++; cur -= 7*24*3600*1000; }
+  return count;
 }
 
 // ─── styles ─────────────────────────────────────────────
@@ -54,7 +75,7 @@ const STYLES = `
   .user-name{font-family:'Montserrat',sans-serif;font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:1px;}
   .exit-btn{background:transparent;border:none;color:rgba(255,255,255,0.3);font-size:10px;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:1px;}
 
-  .main{max-width:900px;margin:0 auto;padding:36px 24px 80px;}
+  .main{max-width:920px;margin:0 auto;padding:36px 24px 80px;}
   .page-header{border-left:2px solid #B8960C;padding-left:20px;margin-bottom:32px;}
   .page-eyebrow{font-size:9px;letter-spacing:4px;color:#B8960C;text-transform:uppercase;margin-bottom:4px;}
   .page-title{font-family:'Cormorant Garamond',serif;font-size:30px;color:#1E1408;font-weight:400;}
@@ -74,9 +95,11 @@ const STYLES = `
   .ci:focus{border-color:#B8960C;}
   .ci::placeholder{color:rgba(30,20,8,0.3);}
   select.ci option{background:#fff;color:#1E1408;}
+  textarea.ci{resize:none;line-height:1.6;}
 
   .card{background:#fff;border:1px solid rgba(184,150,12,0.18);transition:all 0.25s;margin-bottom:8px;}
   .card:hover{border-color:rgba(184,150,12,0.4);box-shadow:0 2px 14px rgba(184,150,12,0.07);}
+  .card.overdue{border-left:3px solid #C0392B !important;}
   .add-form{background:#fff;border:1px solid rgba(184,150,12,0.25);padding:24px;margin-bottom:20px;box-shadow:0 4px 20px rgba(184,150,12,0.06);}
 
   .action-row{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;}
@@ -88,18 +111,31 @@ const STYLES = `
   .action-name{font-size:10px;letter-spacing:1.5px;color:#B8960C;text-transform:uppercase;margin-bottom:3px;}
   .action-text{font-family:'Cormorant Garamond',serif;font-size:17px;color:#1E1408;line-height:1.3;}
   .action-text.done{color:rgba(30,20,8,0.35);text-decoration:line-through;}
-  .action-meta{font-size:10px;color:rgba(30,20,8,0.35);margin-top:4px;}
+  .action-meta{font-size:10px;color:rgba(30,20,8,0.35);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .overdue-badge{font-size:9px;letter-spacing:1px;color:#C0392B;background:rgba(192,57,43,0.08);padding:2px 6px;text-transform:uppercase;}
   .action-actions{display:flex;gap:6px;flex-shrink:0;align-items:flex-start;padding-top:2px;}
 
-  .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;}
-  .stat-card{background:#fff;border:1px solid rgba(184,150,12,0.18);padding:20px 16px;text-align:center;}
-  .stat-num{font-family:'Cormorant Garamond',serif;font-size:36px;color:#B8960C;line-height:1;}
+  /* Comment */
+  .comment-area{padding:0 18px 14px;border-top:1px solid rgba(184,150,12,0.08);}
+  .comment-label{font-size:9px;letter-spacing:2px;color:rgba(30,20,8,0.35);text-transform:uppercase;margin-bottom:6px;padding-top:10px;}
+  .comment-text{font-size:12px;color:rgba(30,20,8,0.6);font-style:italic;line-height:1.5;}
+  .comment-input-row{display:flex;gap:8px;margin-top:8px;}
+  .comment-input{flex:1;padding:8px 12px;background:#FAF7F2;border:1px solid rgba(184,150,12,0.2);color:#1E1408;font-family:'Montserrat',sans-serif;font-size:12px;outline:none;}
+  .comment-input:focus{border-color:#B8960C;}
+  .comment-input::placeholder{color:rgba(30,20,8,0.25);}
+  .comment-send-btn{background:#B8960C;border:none;color:#fff;padding:8px 14px;cursor:pointer;font-size:11px;font-family:'Montserrat',sans-serif;letter-spacing:1px;transition:all 0.2s;}
+  .comment-send-btn:hover{background:#9A7A08;}
+
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}
+  .stat-card{background:#fff;border:1px solid rgba(184,150,12,0.18);padding:18px 14px;text-align:center;}
+  .stat-num{font-family:'Cormorant Garamond',serif;font-size:34px;color:#B8960C;line-height:1;}
   .stat-label{font-size:9px;letter-spacing:2px;color:rgba(30,20,8,0.45);text-transform:uppercase;margin-top:6px;}
 
-  .filter-row{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .filter-row{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center;}
   .ftab{padding:6px 16px;font-family:'Montserrat',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;border:1px solid rgba(184,150,12,0.35);background:transparent;color:rgba(30,20,10,0.45);transition:all 0.2s;}
   .ftab.active{background:#B8960C;color:#fff;border-color:#B8960C;font-weight:600;}
   .ftab:hover:not(.active){border-color:#B8960C;color:#B8960C;}
+  .filter-divider{width:1px;height:20px;background:rgba(184,150,12,0.25);}
 
   .add-trigger{width:100%;padding:13px;border:1px dashed rgba(184,150,12,0.35);background:transparent;color:rgba(184,150,12,0.55);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:2px;text-transform:uppercase;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px;}
   .add-trigger:hover{border-color:#B8960C;color:#B8960C;}
@@ -110,37 +146,61 @@ const STYLES = `
   .loading{text-align:center;padding:60px 0;font-family:'Cormorant Garamond',serif;font-size:18px;color:rgba(30,20,8,0.3);font-style:italic;}
 
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;}
-  .modal{background:#FAF7F2;border:1px solid rgba(184,150,12,0.3);padding:32px;width:100%;max-width:520px;}
+  .modal{background:#FAF7F2;border:1px solid rgba(184,150,12,0.3);padding:32px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;}
   .modal-title{font-family:'Cormorant Garamond',serif;font-size:22px;color:#B8960C;margin-bottom:20px;}
 
-  /* GUARDIANA PANEL */
+  /* GUARDIANA */
   .member-block{background:#fff;border:1px solid rgba(184,150,12,0.18);margin-bottom:12px;overflow:hidden;}
-  .member-header{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;border-bottom:1px solid rgba(184,150,12,0.1);}
+  .member-block.inactive{border-left:3px solid #C0392B;}
+  .member-header{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;}
   .member-header:hover{background:rgba(184,150,12,0.02);}
   .member-avatar{width:32px;height:32px;border:1px solid #B8960C;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:15px;color:#B8960C;flex-shrink:0;}
+  .member-avatar.inactive{border-color:#C0392B;color:#C0392B;}
   .member-info{flex:1;}
-  .member-name-lg{font-family:'Cormorant Garamond',serif;font-size:18px;color:#1E1408;}
-  .member-counts{font-size:10px;color:rgba(30,20,8,0.4);letter-spacing:0.5px;margin-top:1px;}
+  .member-name-lg{font-family:'Cormorant Garamond',serif;font-size:18px;color:#1E1408;display:flex;align-items:center;gap:8px;}
+  .member-counts{font-size:10px;color:rgba(30,20,8,0.4);letter-spacing:0.5px;margin-top:2px;}
   .progress-bar{background:#EEE9E0;height:6px;flex:1;}
-  .progress-fill{height:100%;background:#B8960C;transition:width 0.4s;}
+  .progress-fill{height:100%;transition:width 0.4s;}
+  .inactive-badge{font-size:9px;letter-spacing:1px;color:#C0392B;background:rgba(192,57,43,0.08);padding:2px 7px;text-transform:uppercase;}
+  .streak-badge{font-size:9px;letter-spacing:1px;color:#B8960C;background:rgba(184,150,12,0.1);padding:2px 7px;text-transform:uppercase;}
 
   .week-group{margin:0;}
-  .week-label{font-size:9px;letter-spacing:3px;color:#B8960C;text-transform:uppercase;padding:8px 18px;background:rgba(184,150,12,0.04);border-bottom:1px solid rgba(184,150,12,0.08);}
+  .week-label{font-size:9px;letter-spacing:3px;color:#B8960C;text-transform:uppercase;padding:8px 18px;background:rgba(184,150,12,0.04);border-bottom:1px solid rgba(184,150,12,0.08);border-top:1px solid rgba(184,150,12,0.08);}
 
-  .admin-section{margin-bottom:36px;}
-  .section-title{font-family:'Cormorant Garamond',serif;font-size:22px;color:#1E1408;margin-bottom:16px;border-bottom:1px solid rgba(184,150,12,0.2);padding-bottom:8px;}
+  /* ADMIN */
   .group-card{background:#fff;border:1px solid rgba(184,150,12,0.2);padding:20px;margin-bottom:12px;}
   .group-name-lg{font-family:'Cormorant Garamond',serif;font-size:18px;color:#1E1408;margin-bottom:4px;}
-  .group-meta{font-size:10px;color:rgba(30,20,8,0.4);letter-spacing:1px;margin-bottom:12px;}
+  .group-meta-sm{font-size:10px;color:rgba(30,20,8,0.4);letter-spacing:1px;margin-bottom:12px;}
   .member-pill{display:inline-flex;align-items:center;gap:6px;background:#FAF7F2;border:1px solid rgba(184,150,12,0.2);padding:4px 10px;margin:3px;font-size:11px;color:#1E1408;}
   .member-pill button{background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:12px;padding:0;}
   .member-pill button:hover{color:#C0392B;}
   .code-badge{display:inline-block;background:#0A0A0A;color:#B8960C;font-family:'Montserrat',sans-serif;font-size:10px;letter-spacing:3px;padding:3px 8px;}
 
-  .error-msg{font-size:11px;color:#E74C3C;letter-spacing:0.5px;margin-top:4px;}
+  /* ADMIN GLOBAL SUMMARY */
+  .global-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;}
+  .global-card{background:#0A0A0A;padding:20px 16px;text-align:center;}
+  .global-num{font-family:'Cormorant Garamond',serif;font-size:34px;color:#B8960C;line-height:1;}
+  .global-label{font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.4);text-transform:uppercase;margin-top:6px;}
+  .group-summary-row{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#fff;border:1px solid rgba(184,150,12,0.15);margin-bottom:8px;}
+  .group-summary-name{font-family:'Cormorant Garamond',serif;font-size:16px;color:#1E1408;flex:1;}
+  .group-summary-stat{text-align:right;}
+  .group-summary-num{font-family:'Cormorant Garamond',serif;font-size:22px;color:#B8960C;}
+  .group-summary-sub{font-size:9px;color:rgba(30,20,8,0.4);letter-spacing:1px;}
 
-  @media(max-width:600px){
-    .stats-row{grid-template-columns:1fr 1fr;}
+  /* QUICK VIEW */
+  .quick-card{background:#fff;border-left:3px solid #B8960C;padding:12px 16px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px;}
+  .quick-name{font-size:10px;letter-spacing:1.5px;color:#B8960C;text-transform:uppercase;margin-bottom:2px;}
+  .quick-text{font-family:'Cormorant Garamond',serif;font-size:15px;color:#1E1408;}
+  .quick-done{border-left-color:#1A6B3C;}
+  .quick-done .quick-text{color:rgba(30,20,8,0.4);text-decoration:line-through;}
+
+  /* EXPORT */
+  .export-area{background:#0A0A0A;color:rgba(255,255,255,0.7);font-family:'Montserrat',sans-serif;font-size:11px;padding:16px;line-height:1.8;white-space:pre-wrap;max-height:300px;overflow-y:auto;margin-top:12px;}
+
+  .error-msg{font-size:11px;color:#E74C3C;letter-spacing:0.5px;}
+
+  @media(max-width:640px){
+    .stats-row,.global-grid{grid-template-columns:1fr 1fr;}
     .header{padding:0 16px;}
     .main{padding:24px 16px 60px;}
   }
@@ -183,22 +243,17 @@ function Header({ title, user, onExit }) {
 function EditModal({ action, onSave, onClose }) {
   const [text, setText] = useState(action.action_text);
   const [date, setDate] = useState(action.action_date);
-
   const save = async () => {
     if (!text.trim() || !date.trim()) return;
     await supabase.from("actions").update({ action_text: text, action_date: date }).eq("id", action.id);
-    onSave();
-    onClose();
+    onSave(); onClose();
   };
-
   return (
-    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal">
         <div className="modal-title">Editar acción</div>
-        <textarea value={text} onChange={e=>setText(e.target.value)} rows={3}
-          className="ci" style={{resize:"none",marginBottom:12,lineHeight:1.6}} />
-        <input type="date" value={date} onChange={e=>setDate(e.target.value)}
-          className="ci" style={{marginBottom:20}} />
+        <textarea value={text} onChange={e=>setText(e.target.value)} rows={3} className="ci" style={{marginBottom:12}} />
+        <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="ci" style={{marginBottom:20}} />
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button className="ghost-btn" onClick={onClose}>Cancelar</button>
           <button className="gold-btn" onClick={save}>Guardar cambios</button>
@@ -208,32 +263,153 @@ function EditModal({ action, onSave, onClose }) {
   );
 }
 
-// ─── ActionCard ──────────────────────────────────────────
-function ActionCard({ action, currentMemberId, onToggle, onEdit, onDelete, showName=true }) {
-  const isOwn = currentMemberId && action.member_id === currentMemberId;
+// ─── ExportModal ─────────────────────────────────────────
+function ExportModal({ group, actions, members, onClose }) {
+  const weekLabel = getWeekLabel(new Date().toISOString().split("T")[0]);
+  const thisWeek = actions.filter(a => getWeekLabel(a.action_date) === "Esta semana");
+  const byMember = {};
+  members.forEach(m => { byMember[m.id] = { name: m.name, actions: [] }; });
+  thisWeek.forEach(a => { if (byMember[a.member_id]) byMember[a.member_id].actions.push(a); });
+
+  const lines = [
+    `RESUMEN SEMANAL — ${group.name}`,
+    `Guardiana: ${group.guardiana}`,
+    `${weekLabel} · Generado el ${new Date().toLocaleDateString("es-ES")}`,
+    `${"─".repeat(50)}`,
+    "",
+  ];
+  Object.values(byMember).forEach(({ name, actions: acts }) => {
+    const done = acts.filter(a=>a.completed).length;
+    lines.push(`${name} (${done}/${acts.length} completadas)`);
+    if (acts.length === 0) { lines.push("  · Sin acciones esta semana"); }
+    else acts.forEach(a => lines.push(`  ${a.completed?"✓":"○"} ${a.action_text} [${a.action_date}]`));
+    lines.push("");
+  });
+  lines.push(`${"─".repeat(50)}`);
+  lines.push(`Total acciones: ${thisWeek.length} · Completadas: ${thisWeek.filter(a=>a.completed).length}`);
+
+  const text = lines.join("\n");
+  const copy = () => { navigator.clipboard.writeText(text); };
 
   return (
-    <div className="card">
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-title">Resumen semanal</div>
+        <div style={{fontSize:11,color:"rgba(30,20,8,0.5)",marginBottom:12}}>
+          Copia este texto y envíalo a Maïté antes de la sesión de claridad.
+        </div>
+        <div className="export-area">{text}</div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
+          <button className="ghost-btn" onClick={onClose}>Cerrar</button>
+          <button className="gold-btn" onClick={copy}>Copiar texto</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── QuickViewModal ──────────────────────────────────────
+function QuickViewModal({ actions, members, onClose }) {
+  const thisWeek = actions.filter(a => getWeekLabel(a.action_date) === "Esta semana"
+    || getWeekLabel(a.action_date) === "Semana pasada");
+  const byMember = {};
+  members.forEach(m => { byMember[m.id] = { name: m.name, actions: [] }; });
+  thisWeek.forEach(a => { if (byMember[a.member_id]) byMember[a.member_id].actions.push(a); });
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:620}}>
+        <div className="modal-title">Vista rápida — Para la sesión</div>
+        <div style={{fontSize:11,color:"rgba(30,20,8,0.5)",marginBottom:20}}>
+          Acciones de esta semana y la anterior. Úsala durante la llamada.
+        </div>
+        <div style={{maxHeight:"60vh",overflowY:"auto"}}>
+          {Object.values(byMember).map(({ name, actions: acts }) => (
+            <div key={name} style={{marginBottom:16}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",borderBottom:"1px solid rgba(184,150,12,0.15)",paddingBottom:4,marginBottom:6}}>
+                {name}
+                {acts.length === 0 && <span style={{fontSize:11,color:"#C0392B",marginLeft:8,fontFamily:"'Montserrat',sans-serif",letterSpacing:1}}>SIN ACTIVIDAD</span>}
+              </div>
+              {acts.length === 0 && (
+                <div style={{fontSize:12,color:"rgba(30,20,8,0.35)",fontStyle:"italic",paddingLeft:4}}>No hay acciones registradas</div>
+              )}
+              {acts.map(a => (
+                <div key={a.id} className={`quick-card${a.completed?" quick-done":""}`}>
+                  <div style={{fontSize:14,color:a.completed?"#1A6B3C":"rgba(30,20,8,0.3)",flexShrink:0,marginTop:2}}>
+                    {a.completed?"✓":"○"}
+                  </div>
+                  <div>
+                    <div className="quick-text">{a.action_text}</div>
+                    <div style={{fontSize:10,color:"rgba(30,20,8,0.35)",marginTop:2}}>{a.action_date}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+          <button className="ghost-btn" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ActionCard ──────────────────────────────────────────
+function ActionCard({ action, currentMemberId, onToggle, onEdit, showName=true, isGuardiana=false, onComment }) {
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [commentText, setCommentText] = useState(action.guardiana_comment || "");
+  const isOwn = currentMemberId && action.member_id === currentMemberId;
+  const overdue = isOverdue(action.action_date, action.completed);
+
+  const saveComment = async () => {
+    await supabase.from("actions").update({ guardiana_comment: commentText }).eq("id", action.id);
+    if (onComment) onComment();
+    setShowCommentInput(false);
+  };
+
+  return (
+    <div className={`card${overdue?" overdue":""}`}>
       <div className="action-row">
-        <div
-          className={`check-box${action.completed?" done":""}${!isOwn?" readonly":""}`}
-          onClick={() => isOwn && onToggle && onToggle(action)}
-        />
+        <div className={`check-box${action.completed?" done":""}${!isOwn?" readonly":""}`}
+          onClick={() => isOwn && onToggle && onToggle(action)} />
         <div className="action-body">
           {showName && <div className="action-name">{action.member_name}</div>}
           <div className={`action-text${action.completed?" done":""}`}>{action.action_text}</div>
           <div className="action-meta">
-            📅 {action.action_date}
+            <span>📅 {action.action_date}</span>
+            {overdue && <span className="overdue-badge">⚠ Vencida</span>}
             {action.completed && action.completed_at &&
-              ` · ✓ Completada el ${new Date(action.completed_at).toLocaleDateString("es-ES")}`}
+              <span>✓ Completada el {new Date(action.completed_at).toLocaleDateString("es-ES")}</span>}
           </div>
         </div>
-        {isOwn && (
-          <div className="action-actions">
-            {onEdit && <button className="icon-btn edit" onClick={() => onEdit(action)} title="Editar">✎</button>}
-          </div>
-        )}
+        <div className="action-actions">
+          {isOwn && onEdit && <button className="icon-btn edit" onClick={() => onEdit(action)} title="Editar">✎</button>}
+          {isGuardiana && (
+            <button className="icon-btn edit" onClick={() => setShowCommentInput(!showCommentInput)} title="Comentar">💬</button>
+          )}
+        </div>
       </div>
+      {/* Guardiana comment */}
+      {(action.guardiana_comment || isGuardiana) && (
+        <div className="comment-area">
+          {action.guardiana_comment && !showCommentInput && (
+            <>
+              <div className="comment-label">Nota de tu guardiana</div>
+              <div className="comment-text">"{action.guardiana_comment}"</div>
+              {isGuardiana && <button style={{fontSize:10,color:"rgba(184,150,12,0.6)",background:"none",border:"none",cursor:"pointer",marginTop:4,fontFamily:"'Montserrat',sans-serif",letterSpacing:1}} onClick={()=>setShowCommentInput(true)}>Editar nota</button>}
+            </>
+          )}
+          {isGuardiana && showCommentInput && (
+            <div className="comment-input-row">
+              <input className="comment-input" placeholder="Escribe una nota para esta alumna..." value={commentText}
+                onChange={e=>setCommentText(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&saveComment()} />
+              <button className="comment-send-btn" onClick={saveComment}>Guardar</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -366,9 +542,8 @@ function MemberView({ session, onExit }) {
 
   useEffect(() => {
     loadActions();
-    const sub = supabase.channel(`member-actions-${group.id}`)
-      .on("postgres_changes", { event:"*", schema:"public", table:"actions",
-        filter:`group_id=eq.${group.id}` }, () => loadActions())
+    const sub = supabase.channel(`member-${group.id}`)
+      .on("postgres_changes", { event:"*", schema:"public", table:"actions", filter:`group_id=eq.${group.id}` }, loadActions)
       .subscribe();
     return () => supabase.removeChannel(sub);
   }, [loadActions]);
@@ -376,33 +551,23 @@ function MemberView({ session, onExit }) {
   const addAction = async () => {
     if (!newAction.action_text.trim() || !newAction.action_date.trim()) return;
     const { data } = await supabase.from("actions").insert({
-      group_id: group.id, member_id: member.id,
-      member_name: member.name,
-      action_text: newAction.action_text,
-      action_date: newAction.action_date,
-      completed: false
+      group_id: group.id, member_id: member.id, member_name: member.name,
+      action_text: newAction.action_text, action_date: newAction.action_date, completed: false
     }).select().single();
-    if (data) {
-      setActions(prev => [data, ...prev]);
-      setNewAction({ action_text:"", action_date:"" });
-      setShowAdd(false);
-    }
+    if (data) { setActions(prev => [data, ...prev]); setNewAction({ action_text:"", action_date:"" }); setShowAdd(false); }
   };
 
   const toggleComplete = async (action) => {
     const newVal = !action.completed;
-    // Optimistic update
     setActions(prev => prev.map(a => a.id === action.id
-      ? { ...a, completed: newVal, completed_at: newVal ? new Date().toISOString() : null }
-      : a));
-    await supabase.from("actions").update({
-      completed: newVal,
-      completed_at: newVal ? new Date().toISOString() : null
-    }).eq("id", action.id);
+      ? { ...a, completed: newVal, completed_at: newVal ? new Date().toISOString() : null } : a));
+    await supabase.from("actions").update({ completed: newVal, completed_at: newVal ? new Date().toISOString() : null }).eq("id", action.id);
   };
 
   const myActions = actions.filter(a => a.member_id === member.id);
   const myDone = myActions.filter(a => a.completed).length;
+  const myStreak = streak(myActions);
+  const overdueCount = myActions.filter(a => isOverdue(a.action_date, a.completed)).length;
 
   const displayed = filter === "all" ? actions
     : filter === "mine" ? myActions
@@ -411,9 +576,7 @@ function MemberView({ session, onExit }) {
 
   return (
     <div className="app">
-      {editingAction && (
-        <EditModal action={editingAction} onSave={loadActions} onClose={() => setEditingAction(null)} />
-      )}
+      {editingAction && <EditModal action={editingAction} onSave={loadActions} onClose={() => setEditingAction(null)} />}
       <Header title={group.name} user={member.name} onExit={onExit} />
       <div className="main">
         <div className="page-header">
@@ -432,8 +595,12 @@ function MemberView({ session, onExit }) {
             <div className="stat-label">Completadas</div>
           </div>
           <div className="stat-card">
-            <div className="stat-num">{actions.length}</div>
-            <div className="stat-label">Total grupo</div>
+            <div className="stat-num" style={{color:overdueCount>0?"#C0392B":"#B8960C"}}>{overdueCount}</div>
+            <div className="stat-label">Vencidas</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-num" style={{color:myStreak>0?"#1A6B3C":"#B8960C"}}>🔥 {myStreak}</div>
+            <div className="stat-label">Semanas seguidas</div>
           </div>
         </div>
 
@@ -443,11 +610,9 @@ function MemberView({ session, onExit }) {
           <div className="add-form">
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#B8960C",marginBottom:16}}>Nueva acción</div>
             <textarea placeholder="¿Qué acción vas a tomar? Sé específica..."
-              value={newAction.action_text}
-              onChange={e=>setNewAction(p=>({...p,action_text:e.target.value}))}
-              rows={3} className="ci" style={{resize:"none",marginBottom:12,lineHeight:1.6}} />
-            <input type="date" value={newAction.action_date}
-              onChange={e=>setNewAction(p=>({...p,action_date:e.target.value}))}
+              value={newAction.action_text} onChange={e=>setNewAction(p=>({...p,action_text:e.target.value}))}
+              rows={3} className="ci" style={{marginBottom:12}} />
+            <input type="date" value={newAction.action_date} onChange={e=>setNewAction(p=>({...p,action_date:e.target.value}))}
               className="ci" style={{marginBottom:16}} />
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button className="ghost-btn" onClick={()=>setShowAdd(false)}>Cancelar</button>
@@ -463,14 +628,10 @@ function MemberView({ session, onExit }) {
         </div>
 
         {loading && <div className="loading">Cargando acciones...</div>}
-        {!loading && displayed.length === 0 && (
-          <div className="empty"><div className="empty-icon">✦</div><div className="empty-text">No hay acciones aquí todavía</div></div>
-        )}
+        {!loading && displayed.length === 0 && <div className="empty"><div className="empty-icon">✦</div><div className="empty-text">No hay acciones aquí todavía</div></div>}
         {displayed.map(action => (
-          <ActionCard key={action.id} action={action}
-            currentMemberId={member.id}
-            onToggle={toggleComplete}
-            onEdit={setEditingAction} />
+          <ActionCard key={action.id} action={action} currentMemberId={member.id}
+            onToggle={toggleComplete} onEdit={setEditingAction} />
         ))}
       </div>
     </div>
@@ -484,88 +645,94 @@ function GuardianaView({ session, onExit }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
-  const [expandedMembers, setExpandedMembers] = useState({});
   const [weekFilter, setWeekFilter] = useState("all");
+  const [expandedMembers, setExpandedMembers] = useState({});
+  const [showQuickView, setShowQuickView] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   const loadAll = useCallback(async () => {
-    const [{ data: a }, { data: m }] = await Promise.all([
+    const [{ data:a }, { data:m }] = await Promise.all([
       supabase.from("actions").select("*").eq("group_id", group.id).order("action_date", { ascending: true }),
       supabase.from("members").select("*").eq("group_id", group.id).order("name")
     ]);
     if (a) setActions(a);
     if (m) {
       setMembers(m);
-      // Expand all by default
-      const exp = {};
-      m.forEach(mb => { exp[mb.id] = true; });
-      setExpandedMembers(exp);
+      const exp = {}; m.forEach(mb => { exp[mb.id] = true; }); setExpandedMembers(exp);
     }
     setLoading(false);
   }, [group.id]);
 
   useEffect(() => {
     loadAll();
-    const sub = supabase.channel(`guard-actions-${group.id}`)
-      .on("postgres_changes", { event:"*", schema:"public", table:"actions",
-        filter:`group_id=eq.${group.id}` }, () => loadAll())
+    const sub = supabase.channel(`guard-${group.id}`)
+      .on("postgres_changes", { event:"*", schema:"public", table:"actions", filter:`group_id=eq.${group.id}` }, loadAll)
       .subscribe();
     return () => supabase.removeChannel(sub);
   }, [loadAll]);
 
-  const toggleMember = (id) => setExpandedMembers(p => ({ ...p, [id]: !p[id] }));
+  const toggleMember = id => setExpandedMembers(p => ({ ...p, [id]: !p[id] }));
 
-  // Stats
   const totalDone = actions.filter(a=>a.completed).length;
   const totalPending = actions.filter(a=>!a.completed).length;
+  const overdueTotal = actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
 
-  // Get unique weeks from actions
+  // Inactive members: no action created in last 7 days
+  const lastActionDate = {};
+  actions.forEach(a => {
+    if (!lastActionDate[a.member_id] || new Date(a.created_at) > new Date(lastActionDate[a.member_id]))
+      lastActionDate[a.member_id] = a.created_at;
+  });
+  const inactiveCount = members.filter(m => !lastActionDate[m.id] || daysSince(lastActionDate[m.id]) > 7).length;
+
   const allWeeks = [...new Set(actions.map(a => getWeekLabel(a.action_date)))];
 
-  // Filter actions
   let filteredActions = actions;
-  if (filter === "pending") filteredActions = actions.filter(a=>!a.completed);
-  if (filter === "done") filteredActions = actions.filter(a=>a.completed);
-  if (weekFilter !== "all") filteredActions = filteredActions.filter(a => getWeekLabel(a.action_date) === weekFilter);
+  if (filter === "pending") filteredActions = filteredActions.filter(a=>!a.completed);
+  if (filter === "done") filteredActions = filteredActions.filter(a=>a.completed);
+  if (filter === "overdue") filteredActions = filteredActions.filter(a=>isOverdue(a.action_date,a.completed));
+  if (weekFilter !== "all") filteredActions = filteredActions.filter(a=>getWeekLabel(a.action_date)===weekFilter);
 
-  // Group by member — only show members with actions matching the current filter.
-  // Exception: in "all" view with no week filter, also show members with zero actions
-  // so the guardiana can see who hasn't submitted anything yet.
+  // Build byMember — only members with matching actions (except "all" + no week filter)
   const byMember = {};
   filteredActions.forEach(a => {
     if (!byMember[a.member_id]) {
-      const fullMember = members.find(m => m.id === a.member_id);
-      byMember[a.member_id] = {
-        member: fullMember || { id: a.member_id, name: a.member_name },
-        actions: []
-      };
+      const fm = members.find(m=>m.id===a.member_id);
+      byMember[a.member_id] = { member: fm||{id:a.member_id,name:a.member_name}, actions:[] };
     }
     byMember[a.member_id].actions.push(a);
   });
   if (filter === "all" && weekFilter === "all") {
-    members.forEach(m => {
-      if (!byMember[m.id]) byMember[m.id] = { member: m, actions: [] };
-    });
+    members.forEach(m => { if (!byMember[m.id]) byMember[m.id] = { member:m, actions:[] }; });
   }
 
-  // Group member's actions by week
-  const groupByWeek = (acts) => {
+  const groupByWeek = acts => {
     const map = {};
-    acts.forEach(a => {
-      const w = getWeekLabel(a.action_date);
-      if (!map[w]) map[w] = [];
-      map[w].push(a);
-    });
+    acts.forEach(a => { const w=getWeekLabel(a.action_date); if(!map[w])map[w]=[]; map[w].push(a); });
     return map;
   };
 
   return (
     <div className="app">
+      {showQuickView && <QuickViewModal actions={actions} members={members} onClose={()=>setShowQuickView(false)} />}
+      {showExport && <ExportModal group={group} actions={actions} members={members} onClose={()=>setShowExport(false)} />}
+
       <Header title={`${group.name} — Guardiana`} user={group.guardiana} onExit={onExit} />
       <div className="main">
-        <div className="page-header">
-          <div className="page-eyebrow">Panel de guardiana</div>
-          <div className="page-title">Seguimiento del grupo</div>
-          <div className="page-sub">{group.name} · {actions.length} acciones · {members.length} alumnas</div>
+        <div className="page-header" style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+          <div style={{borderLeft:"2px solid #B8960C",paddingLeft:20}}>
+            <div className="page-eyebrow">Panel de guardiana</div>
+            <div className="page-title">Seguimiento del grupo</div>
+            <div className="page-sub">{group.name} · {members.length} alumnas · {actions.length} acciones</div>
+          </div>
+          <div style={{display:"flex",gap:8,flexShrink:0,paddingTop:4}}>
+            <button className="ghost-btn" style={{fontSize:10,letterSpacing:1.5,padding:"8px 14px"}} onClick={()=>setShowQuickView(true)}>
+              ⚡ Vista sesión
+            </button>
+            <button className="ghost-btn" style={{fontSize:10,letterSpacing:1.5,padding:"8px 14px"}} onClick={()=>setShowExport(true)}>
+              📋 Resumen semanal
+            </button>
+          </div>
         </div>
 
         <div className="stats-row">
@@ -578,18 +745,30 @@ function GuardianaView({ session, onExit }) {
             <div className="stat-label">Completadas ✓</div>
           </div>
           <div className="stat-card">
-            <div className="stat-num" style={{color:"#C0392B"}}>{totalPending}</div>
-            <div className="stat-label">Pendientes</div>
+            <div className="stat-num" style={{color:overdueTotal>0?"#C0392B":"#B8960C"}}>{overdueTotal}</div>
+            <div className="stat-label">Vencidas ⚠</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-num" style={{color:inactiveCount>0?"#C0392B":"#1A6B3C"}}>{inactiveCount}</div>
+            <div className="stat-label">Sin actividad 7d</div>
           </div>
         </div>
 
-        {/* Filters */}
+        {inactiveCount > 0 && (
+          <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.2)",padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:16}}>⚠️</span>
+            <span style={{fontSize:12,color:"#C0392B"}}>
+              {members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).map(m=>m.name).join(", ")} — sin actividad en los últimos 7 días
+            </span>
+          </div>
+        )}
+
         <div className="filter-row">
-          {[["all","Todas"],["pending","Pendientes"],["done","Completadas"]].map(([id,label])=>(
+          {[["all","Todas"],["pending","Pendientes"],["done","Completadas"],["overdue","Vencidas ⚠"]].map(([id,label])=>(
             <button key={id} className={`ftab${filter===id?" active":""}`} onClick={()=>setFilter(id)}>{label}</button>
           ))}
           {allWeeks.length > 0 && <>
-            <div style={{width:1,background:"rgba(184,150,12,0.3)",margin:"0 4px"}}/>
+            <div className="filter-divider"/>
             <button className={`ftab${weekFilter==="all"?" active":""}`} onClick={()=>setWeekFilter("all")}>Todas las semanas</button>
             {allWeeks.map(w=>(
               <button key={w} className={`ftab${weekFilter===w?" active":""}`} onClick={()=>setWeekFilter(w)}>{w}</button>
@@ -598,60 +777,69 @@ function GuardianaView({ session, onExit }) {
         </div>
 
         {loading && <div className="loading">Cargando...</div>}
+        {!loading && Object.values(byMember).length===0 && <div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay acciones en este filtro</div></div>}
 
-        {!loading && Object.values(byMember).length === 0 && (
-          <div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay acciones todavía</div></div>
-        )}
+        {Object.values(byMember)
+          .sort((a,b) => {
+            // Sort: inactive first, then by name
+            const aInactive = !lastActionDate[a.member.id] || daysSince(lastActionDate[a.member.id]) > 7;
+            const bInactive = !lastActionDate[b.member.id] || daysSince(lastActionDate[b.member.id]) > 7;
+            if (aInactive && !bInactive) return -1;
+            if (!aInactive && bInactive) return 1;
+            return a.member.name.localeCompare(b.member.name);
+          })
+          .map(({ member:mb, actions:acts }) => {
+            const done = acts.filter(a=>a.completed).length;
+            const pct = acts.length > 0 ? Math.round(done/acts.length*100) : 0;
+            const isExpanded = expandedMembers[mb.id];
+            const isInactive = !lastActionDate[mb.id] || daysSince(lastActionDate[mb.id]) > 7;
+            const memberStreak = streak(actions.filter(a=>a.member_id===mb.id));
+            const byWeek = groupByWeek(acts);
 
-        {/* Member blocks */}
-        {Object.values(byMember).map(({ member: mb, actions: acts }) => {
-          const done = acts.filter(a=>a.completed).length;
-          const pct = acts.length > 0 ? Math.round(done/acts.length*100) : 0;
-          const isExpanded = expandedMembers[mb.id];
-          const byWeek = groupByWeek(acts);
-
-          return (
-            <div key={mb.id} className="member-block">
-              {/* Member header */}
-              <div className="member-header" onClick={()=>toggleMember(mb.id)}>
-                <div className="member-avatar">{mb.name[0]}</div>
-                <div className="member-info">
-                  <div className="member-name-lg">{mb.name}</div>
-                  <div className="member-counts">{done}/{acts.length} completadas · {pct}%</div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                  <div style={{width:100}}>
-                    <div className="progress-bar">
-                      <div className="progress-fill" style={{width:`${pct}%`, background: pct===100?"#1A6B3C":"#B8960C"}}/>
+            return (
+              <div key={mb.id} className={`member-block${isInactive?" inactive":""}`}>
+                <div className="member-header" onClick={()=>toggleMember(mb.id)}>
+                  <div className={`member-avatar${isInactive?" inactive":""}`}>{mb.name[0]}</div>
+                  <div className="member-info">
+                    <div className="member-name-lg">
+                      {mb.name}
+                      {isInactive && <span className="inactive-badge">Sin actividad</span>}
+                      {!isInactive && memberStreak > 1 && <span className="streak-badge">🔥 {memberStreak} semanas</span>}
                     </div>
+                    <div className="member-counts">{done}/{acts.length} completadas · {pct}%{acts.filter(a=>isOverdue(a.action_date,a.completed)).length>0?` · ${acts.filter(a=>isOverdue(a.action_date,a.completed)).length} vencidas`:""}</div>
                   </div>
-                  <div style={{color:"#B8960C",fontSize:11,opacity:0.6,width:12}}>{isExpanded?"▲":"▼"}</div>
-                </div>
-              </div>
-
-              {/* Expanded: actions grouped by week */}
-              {isExpanded && acts.length > 0 && (
-                <div>
-                  {Object.entries(byWeek).map(([week, weekActs]) => (
-                    <div key={week} className="week-group">
-                      <div className="week-label">{week} · {weekActs.filter(a=>a.completed).length}/{weekActs.length} completadas</div>
-                      {weekActs.map(action => (
-                        <ActionCard key={action.id} action={action}
-                          currentMemberId={null} onToggle={null} onEdit={null} showName={false} />
-                      ))}
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                    <div style={{width:100}}>
+                      <div className="progress-bar">
+                        <div className="progress-fill" style={{width:`${pct}%`,background:pct===100?"#1A6B3C":isInactive?"#C0392B":"#B8960C"}}/>
+                      </div>
                     </div>
-                  ))}
+                    <div style={{color:"#B8960C",fontSize:11,opacity:0.6,width:12}}>{isExpanded?"▲":"▼"}</div>
+                  </div>
                 </div>
-              )}
 
-              {isExpanded && acts.length === 0 && (
-                <div style={{padding:"16px 18px",fontSize:12,color:"rgba(30,20,8,0.35)",fontStyle:"italic"}}>
-                  Esta alumna no tiene acciones en este filtro
-                </div>
-              )}
-            </div>
-          );
-        })}
+                {isExpanded && (
+                  <div>
+                    {acts.length === 0 && (
+                      <div style={{padding:"14px 18px",fontSize:12,color:"rgba(30,20,8,0.35)",fontStyle:"italic",borderTop:"1px solid rgba(184,150,12,0.08)"}}>
+                        {isInactive ? "Esta alumna no ha registrado acciones recientemente." : "Sin acciones en este filtro."}
+                      </div>
+                    )}
+                    {Object.entries(byWeek).map(([week, wActs]) => (
+                      <div key={week} className="week-group">
+                        <div className="week-label">{week} · {wActs.filter(a=>a.completed).length}/{wActs.length} completadas</div>
+                        {wActs.map(action => (
+                          <ActionCard key={action.id} action={action} currentMemberId={null}
+                            onToggle={null} onEdit={null} showName={false}
+                            isGuardiana={true} onComment={loadAll} />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
     </div>
   );
@@ -661,6 +849,7 @@ function GuardianaView({ session, onExit }) {
 function AdminView({ session, onExit }) {
   const [groups, setGroups] = useState([]);
   const [members, setMembers] = useState([]);
+  const [allActions, setAllActions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [showAddMember, setShowAddMember] = useState(null);
@@ -668,12 +857,14 @@ function AdminView({ session, onExit }) {
   const [newMemberName, setNewMemberName] = useState("");
 
   const load = useCallback(async () => {
-    const [{ data:g },{ data:m }] = await Promise.all([
+    const [{ data:g },{ data:m },{ data:a }] = await Promise.all([
       supabase.from("groups").select("*").order("name"),
-      supabase.from("members").select("*").order("name")
+      supabase.from("members").select("*").order("name"),
+      supabase.from("actions").select("*")
     ]);
     if (g) setGroups(g);
     if (m) setMembers(m);
+    if (a) setAllActions(a);
     setLoading(false);
   }, []);
 
@@ -682,47 +873,102 @@ function AdminView({ session, onExit }) {
   const createGroup = async () => {
     if (!newGroup.name.trim() || !newGroup.guardiana.trim() || !newGroup.code.trim()) return;
     await supabase.from("groups").insert({ ...newGroup, code: newGroup.code.toUpperCase() });
-    setNewGroup({ name:"", guardiana:"", code:"" });
-    setShowAddGroup(false);
-    load();
+    setNewGroup({ name:"", guardiana:"", code:"" }); setShowAddGroup(false); load();
   };
 
   const deleteGroup = async (id) => {
     if (!window.confirm("¿Eliminar este grupo y todas sus alumnas y acciones?")) return;
-    await supabase.from("groups").delete().eq("id", id);
-    load();
+    await supabase.from("groups").delete().eq("id", id); load();
   };
 
   const addMembers = async (groupId) => {
     if (!newMemberName.trim()) return;
     const names = newMemberName.split(",").map(n=>n.trim()).filter(Boolean);
     for (const name of names) await supabase.from("members").insert({ group_id: groupId, name });
-    setNewMemberName("");
-    setShowAddMember(null);
-    load();
+    setNewMemberName(""); setShowAddMember(null); load();
   };
 
-  const deleteMember = async (id) => {
-    await supabase.from("members").delete().eq("id", id);
-    load();
-  };
+  const deleteMember = async (id) => { await supabase.from("members").delete().eq("id", id); load(); };
+  const getMembersForGroup = gid => members.filter(m=>m.group_id===gid);
+  const getActionsForGroup = gid => allActions.filter(a=>a.group_id===gid);
 
-  const getMembersForGroup = (gid) => members.filter(m => m.group_id === gid);
+  // Global stats
+  const thisWeekActions = allActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana");
+  const globalActive = members.filter(m => {
+    const lastA = allActions.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    return lastA && daysSince(lastA.created_at) <= 7;
+  }).length;
 
   return (
     <div className="app">
       <Header title="Panel de Administración" user="Estefany" onExit={onExit} />
       <div className="main">
         <div className="page-header">
-          <div className="page-eyebrow">Admin</div>
-          <div className="page-title">Gestión de grupos y alumnas</div>
+          <div className="page-eyebrow">Admin · Visión global</div>
+          <div className="page-title">Gestión de grupos</div>
           <div className="page-sub">
             Código guardianas: <strong style={{color:"#B8960C",letterSpacing:2}}>{GUARDIANA_CODE}</strong>
             &nbsp;·&nbsp; Código admin: <strong style={{color:"#B8960C",letterSpacing:2}}>{ADMIN_CODE}</strong>
           </div>
         </div>
 
-        <button className="add-trigger" onClick={()=>setShowAddGroup(!showAddGroup)}>✦ Nuevo grupo</button>
+        {/* Global summary */}
+        <div className="global-grid">
+          <div className="global-card">
+            <div className="global-num">{members.length}</div>
+            <div className="global-label">Total alumnas</div>
+          </div>
+          <div className="global-card">
+            <div className="global-num" style={{color:"#1A6B3C"}}>{globalActive}</div>
+            <div className="global-label">Activas esta semana</div>
+          </div>
+          <div className="global-card">
+            <div className="global-num">{thisWeekActions.length}</div>
+            <div className="global-label">Acciones esta semana</div>
+          </div>
+        </div>
+
+        {/* Per-group summary */}
+        <div style={{marginBottom:28}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1E1408",marginBottom:12,borderBottom:"1px solid rgba(184,150,12,0.2)",paddingBottom:8}}>
+            Resumen por grupo
+          </div>
+          {groups.map(g => {
+            const gm = getMembersForGroup(g.id);
+            const ga = getActionsForGroup(g.id);
+            const gThisWeek = ga.filter(a=>getWeekLabel(a.action_date)==="Esta semana");
+            const gActive = gm.filter(m => {
+              const last = ga.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+              return last && daysSince(last.created_at) <= 7;
+            }).length;
+            const pct = gm.length > 0 ? Math.round(gActive/gm.length*100) : 0;
+            return (
+              <div key={g.id} className="group-summary-row">
+                <div>
+                  <div className="group-summary-name">{g.name}</div>
+                  <div style={{fontSize:10,color:"rgba(30,20,8,0.4)",letterSpacing:0.5}}>Guardiana: {g.guardiana} · {gm.length} alumnas</div>
+                </div>
+                <div style={{flex:1,margin:"0 16px"}}>
+                  <div className="progress-bar" style={{height:8}}>
+                    <div className="progress-fill" style={{width:`${pct}%`,background:pct>70?"#1A6B3C":"#B8960C"}}/>
+                  </div>
+                  <div style={{fontSize:9,color:"rgba(30,20,8,0.4)",marginTop:3,letterSpacing:1}}>{pct}% activas esta semana</div>
+                </div>
+                <div className="group-summary-stat">
+                  <div className="group-summary-num">{gActive}/{gm.length}</div>
+                  <div className="group-summary-sub">{gThisWeek.length} acciones</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Group management */}
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1E1408",marginBottom:16,borderBottom:"1px solid rgba(184,150,12,0.2)",paddingBottom:8}}>
+          Gestión de grupos
+        </div>
+
+        <button className="add-trigger" style={{marginBottom:20}} onClick={()=>setShowAddGroup(!showAddGroup)}>✦ Nuevo grupo</button>
 
         {showAddGroup && (
           <div className="add-form" style={{marginBottom:24}}>
@@ -752,7 +998,7 @@ function AdminView({ session, onExit }) {
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
                 <div>
                   <div className="group-name-lg">{group.name}</div>
-                  <div className="group-meta">
+                  <div className="group-meta-sm">
                     Guardiana: {group.guardiana}&nbsp;·&nbsp;
                     <span className="code-badge">{group.code}</span>
                     &nbsp;·&nbsp;{grpMembers.length} alumnas
@@ -763,15 +1009,12 @@ function AdminView({ session, onExit }) {
               <div style={{marginBottom:12}}>
                 {grpMembers.map(m=>(
                   <span key={m.id} className="member-pill">
-                    {m.name}
-                    <button onClick={()=>deleteMember(m.id)}>✕</button>
+                    {m.name}<button onClick={()=>deleteMember(m.id)}>✕</button>
                   </span>
                 ))}
-                {grpMembers.length === 0 && (
-                  <span style={{fontSize:11,color:"rgba(30,20,8,0.35)",fontStyle:"italic"}}>Sin alumnas todavía</span>
-                )}
+                {grpMembers.length===0 && <span style={{fontSize:11,color:"rgba(30,20,8,0.35)",fontStyle:"italic"}}>Sin alumnas todavía</span>}
               </div>
-              {showAddMember === group.id ? (
+              {showAddMember===group.id ? (
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <input placeholder="Nombre/s separados por coma" value={newMemberName}
                     onChange={e=>setNewMemberName(e.target.value)}
@@ -790,9 +1033,7 @@ function AdminView({ session, onExit }) {
           );
         })}
 
-        {groups.length === 0 && !loading && (
-          <div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay grupos creados todavía</div></div>
-        )}
+        {groups.length===0&&!loading&&<div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay grupos todavía</div></div>}
       </div>
     </div>
   );
@@ -801,16 +1042,14 @@ function AdminView({ session, onExit }) {
 // ─── ROOT ────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState(null);
-
   useEffect(() => {
     const el = document.createElement("style");
     el.textContent = STYLES;
     document.head.appendChild(el);
     return () => document.head.removeChild(el);
   }, []);
-
   if (!session) return <LoginScreen onLogin={setSession} />;
-  if (session.role === "admin") return <AdminView session={session} onExit={()=>setSession(null)} />;
-  if (session.role === "guardiana") return <GuardianaView session={session} onExit={()=>setSession(null)} />;
+  if (session.role==="admin") return <AdminView session={session} onExit={()=>setSession(null)} />;
+  if (session.role==="guardiana") return <GuardianaView session={session} onExit={()=>setSession(null)} />;
   return <MemberView session={session} onExit={()=>setSession(null)} />;
 }
