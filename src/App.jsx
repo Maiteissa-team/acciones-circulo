@@ -473,77 +473,156 @@ function ActionCard({ action, currentMemberId, onToggle, onEdit, showName=true, 
   );
 }
 
-// ─── CalendarView ─────────────────────────────────────
-function CalendarView({ actions, currentMemberId }) {
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
-  const [popup, setPopup] = useState(null); // {day, actions}
+// ─── WeeklyCalendar ──────────────────────────────
+function WeeklyCalendar({ actions, currentMemberId }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [popup, setPopup] = useState(null); // {dayIdx, actions}
 
-  const firstDay = getFirstDayOfMonth(year, month);
-  const daysInMonth = getDaysInMonth(year, month);
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  // Compute start of current week (Monday) + offset
+  const getWeekStart = (offset) => {
+    const now = new Date();
+    const day = now.getDay() === 0 ? 6 : now.getDay() - 1; // Mon=0
+    const mon = new Date(now); mon.setDate(now.getDate() - day + offset * 7);
+    mon.setHours(0,0,0,0); return mon;
+  };
 
-  // Map actions by date
+  const weekStart = getWeekStart(weekOffset);
+  const days = Array.from({length:7}, (_,i) => {
+    const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d;
+  });
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const DAY_LABELS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+  const MONTHS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+  const weekLabel = () => {
+    const s = days[0]; const e = days[6];
+    if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${e.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`;
+    return `${s.getDate()} ${MONTHS[s.getMonth()]} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`;
+  };
+
+  // Map actions by date string
   const byDate = {};
   actions.forEach(a => {
     if (!byDate[a.action_date]) byDate[a.action_date] = [];
     byDate[a.action_date].push(a);
   });
 
-  const prevMonth = () => { if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1); };
-  const nextMonth = () => { if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1); };
-
-  const cells = [];
-  for (let i=0;i<firstDay;i++) cells.push(null);
-  for (let d=1;d<=daysInMonth;d++) cells.push(d);
+  const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
   return (
-    <div className="calendar-wrap">
-      <div className="cal-header">
-        <button className="cal-nav" onClick={prevMonth}>‹</button>
-        <div className="cal-title">{MONTH_NAMES[month]} {year}</div>
-        <button className="cal-nav" onClick={nextMonth}>›</button>
+    <div style={{background:"#fff",border:"1px solid rgba(184,150,12,0.18)",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid rgba(184,150,12,0.12)"}}>
+        <button className="cal-nav" onClick={()=>setWeekOffset(w=>w-1)}>‹</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:"#1E1408"}}>{weekLabel()}</div>
+          {weekOffset!==0&&<button onClick={()=>setWeekOffset(0)} style={{fontSize:9,letterSpacing:2,color:"#B8960C",background:"none",border:"none",cursor:"pointer",fontFamily:"'Montserrat',sans-serif",marginTop:2}}>HOY</button>}
+        </div>
+        <button className="cal-nav" onClick={()=>setWeekOffset(w=>w+1)}>›</button>
       </div>
-      <div className="cal-grid">
-        {DAY_NAMES.map(d=><div key={d} className="cal-day-name">{d}</div>)}
-        {cells.map((day,i) => {
-          if (!day) return <div key={`e${i}`} className="cal-day empty"/>;
-          const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+
+      {/* Day columns */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0}}>
+        {days.map((day,i) => {
+          const dateStr = fmtDate(day);
+          const isToday = dateStr === todayStr;
           const dayActions = byDate[dateStr] || [];
-          const isToday = dateStr===todayStr;
+          const isOpen = popup?.dayIdx === i;
+
           return (
-            <div key={day} className={`cal-day${dayActions.length?" has-actions":""}${isToday?" today":""}`}
-              onClick={()=>dayActions.length&&setPopup(popup?.day===day?null:{day,actions:dayActions})}
-              style={{position:"relative"}}>
-              <div className="cal-day-num">{day}</div>
-              <div>{dayActions.slice(0,4).map((a,idx)=>(
-                <span key={idx} className={`cal-dot${a.completed?" done":isOverdue(a.action_date,a.completed)?" overdue":" pending"}`}/>
-              ))}</div>
-              {popup?.day===day&&(
-                <div className="cal-day-popup">
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"#B8960C",textTransform:"uppercase",marginBottom:8}}>
-                    {day} {MONTH_NAMES[month]}
-                  </div>
-                  {dayActions.map((a,idx)=>(
-                    <div key={idx} className="cal-popup-item">
-                      <span style={{color:a.completed?"#1A6B3C":isOverdue(a.action_date,a.completed)?"#C0392B":"#B8960C",fontSize:12}}>
-                        {a.completed?"✓":"○"}
-                      </span>
-                      <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:14}}>{a.action_text}</span>
+            <div key={i} style={{borderRight:i<6?"1px solid rgba(184,150,12,0.08)":"none",minHeight:120,position:"relative"}}>
+              {/* Day header */}
+              <div style={{
+                padding:"10px 8px 8px",
+                borderBottom:"1px solid rgba(184,150,12,0.08)",
+                background:isToday?"rgba(184,150,12,0.06)":"transparent",
+                textAlign:"center"
+              }}>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:isToday?"#B8960C":"rgba(30,20,8,0.4)",textTransform:"uppercase"}}>{DAY_LABELS[i]}</div>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:isToday?"#B8960C":"#1E1408",marginTop:2,fontWeight:isToday?600:300}}>{day.getDate()}</div>
+              </div>
+
+              {/* Actions */}
+              <div style={{padding:"6px 4px"}}>
+                {dayActions.length === 0 && (
+                  <div style={{height:40}}/>
+                )}
+                {dayActions.slice(0,3).map((a,idx) => {
+                  const isOwn = a.member_id === currentMemberId;
+                  const done = a.completed;
+                  const over = isOverdue(a.action_date, a.completed);
+                  return (
+                    <div key={idx}
+                      onClick={()=>setPopup(isOpen&&popup.actionIdx===idx?null:{dayIdx:i,actionIdx:idx,actions:dayActions})}
+                      style={{
+                        padding:"4px 6px",marginBottom:3,cursor:"pointer",
+                        background:done?"rgba(26,107,60,0.08)":over?"rgba(192,57,43,0.08)":"rgba(184,150,12,0.08)",
+                        borderLeft:`2px solid ${done?"#1A6B3C":over?"#C0392B":"#B8960C"}`,
+                        borderRadius:0,
+                      }}>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:8,letterSpacing:1,color:done?"#1A6B3C":over?"#C0392B":"#B8960C",textTransform:"uppercase",marginBottom:1}}>
+                        {isOwn?"Yo":a.member_name.split(" ")[0]}
+                      </div>
+                      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:12,color:done?"rgba(30,20,8,0.45)":"#1E1408",lineHeight:1.2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",textDecoration:done?"line-through":"none"}}>
+                        {a.action_text}
+                      </div>
                     </div>
-                  ))}
+                  );
+                })}
+                {dayActions.length > 3 && (
+                  <div onClick={()=>setPopup({dayIdx:i,actions:dayActions})}
+                    style={{fontSize:9,color:"#B8960C",cursor:"pointer",padding:"2px 6px",letterSpacing:1,fontFamily:"'Montserrat',sans-serif"}}>
+                    +{dayActions.length-3} más
+                  </div>
+                )}
+              </div>
+
+              {/* Popup */}
+              {isOpen && (
+                <div style={{
+                  position:"absolute",top:"100%",left:i>3?undefined:"0",right:i>3?"0":undefined,
+                  zIndex:50,background:"#fff",border:"1px solid rgba(184,150,12,0.3)",
+                  padding:14,minWidth:220,maxWidth:280,
+                  boxShadow:"0 4px 20px rgba(0,0,0,0.12)"
+                }}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"#B8960C",textTransform:"uppercase",marginBottom:10}}>
+                    {DAY_LABELS[i]} {day.getDate()} {MONTHS[day.getMonth()]}
+                  </div>
+                  {popup.actions.map((a,idx) => {
+                    const isOwn = a.member_id === currentMemberId;
+                    const done = a.completed;
+                    const over = isOverdue(a.action_date, a.completed);
+                    return (
+                      <div key={idx} style={{marginBottom:10,paddingBottom:10,borderBottom:idx<popup.actions.length-1?"1px solid rgba(184,150,12,0.1)":"none"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                          <div style={{width:18,height:18,border:`1.5px solid ${done?"#1A6B3C":over?"#C0392B":"rgba(184,150,12,0.4)"}`,background:done?"#1A6B3C":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            {done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
+                          </div>
+                          <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:1,color:done?"#1A6B3C":over?"#C0392B":"#B8960C",textTransform:"uppercase"}}>
+                            {isOwn?"Yo":a.member_name}
+                          </span>
+                        </div>
+                        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:done?"rgba(30,20,8,0.4)":"#1E1408",lineHeight:1.4,textDecoration:done?"line-through":"none",paddingLeft:24}}>
+                          {a.action_text}
+                        </div>
+                        {over&&<div style={{fontSize:9,color:"#C0392B",letterSpacing:1,marginTop:3,paddingLeft:24}}>FUERA DE PLAZO</div>}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           );
         })}
       </div>
-      <div style={{display:"flex",gap:16,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(184,150,12,0.1)"}}>
-        {[["done","#1A6B3C","Completada"],["pending","#B8960C","Pendiente"],["overdue","#C0392B","Fuera de plazo"]].map(([k,c,l])=>(
-          <div key={k} style={{display:"flex",alignItems:"center",gap:5}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:c}}/>
-            <span style={{fontSize:10,color:"rgba(30,20,8,0.5)",fontFamily:"'Montserrat',sans-serif"}}>{l}</span>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,padding:"10px 16px",borderTop:"1px solid rgba(184,150,12,0.08)"}}>
+        {[["#1A6B3C","Completada"],["#B8960C","Pendiente"],["#C0392B","Fuera de plazo"]].map(([c,l])=>(
+          <div key={l} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,background:c}}/>
+            <span style={{fontSize:9,color:"rgba(30,20,8,0.5)",fontFamily:"'Montserrat',sans-serif",letterSpacing:0.5}}>{l}</span>
           </div>
         ))}
       </div>
@@ -551,27 +630,37 @@ function CalendarView({ actions, currentMemberId }) {
   );
 }
 
-// ─── GoalSection ──────────────────────────────────────
-function GoalSection({ member }) {
-  const [goal, setGoal] = useState(null);
+// ─── GoalSection ──────────────────────────────────────────
+function GoalSection({ member, groupId }) {
+  const [myGoal, setMyGoal] = useState(null);
+  const [allGoals, setAllGoals] = useState([]);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("member_goals").select("*").eq("member_id", member.id).single();
-    if (data) { setGoal(data); setText(data.goal_text); }
+    // Load my goal
+    const { data: mine } = await supabase.from("member_goals").select("*").eq("member_id", member.id).single();
+    if (mine) { setMyGoal(mine); setText(mine.goal_text); }
+
+    // Load all goals from group members
+    const { data: members } = await supabase.from("members").select("*").eq("group_id", groupId);
+    if (members) {
+      const ids = members.map(m => m.id);
+      const { data: goals } = await supabase.from("member_goals").select("*, members(name)").in("member_id", ids);
+      if (goals) setAllGoals(goals.filter(g => g.member_id !== member.id && g.goal_text));
+    }
     setLoading(false);
-  }, [member.id]);
+  }, [member.id, groupId]);
 
   useEffect(() => { load(); }, [load]);
 
   const save = async () => {
     if (!text.trim()) return;
-    if (goal) {
-      await supabase.from("member_goals").update({ goal_text:text, updated_at:new Date().toISOString() }).eq("id", goal.id);
+    if (myGoal) {
+      await supabase.from("member_goals").update({ goal_text: text, updated_at: new Date().toISOString() }).eq("id", myGoal.id);
     } else {
-      await supabase.from("member_goals").insert({ member_id:member.id, goal_text:text });
+      await supabase.from("member_goals").insert({ member_id: member.id, goal_text: text });
     }
     setEditing(false); load();
   };
@@ -582,33 +671,32 @@ function GoalSection({ member }) {
     <div>
       <div className="page-header" style={{marginBottom:20}}>
         <div className="page-eyebrow">Mi propósito</div>
-        <div className="page-title">Mi objetivo de Manifestadora Experta</div>
-        <div className="page-sub">Un solo objetivo, claro y poderoso. Edítalo cuando evoluciones.</div>
+        <div className="page-title">Objetivos de Manifestadora Experta</div>
+        <div className="page-sub">Un objetivo por alumna. Claro, poderoso y compartido con el grupo.</div>
       </div>
 
-      <div className="goal-section">
-        {/* Gold ornament */}
+      {/* MY GOAL */}
+      <div className="goal-section" style={{marginBottom:24}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
           <div style={{width:32,height:32,border:"1px solid #B8960C",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#B8960C",flexShrink:0}}>{member.name[0]}</div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#1E1408"}}>{member.name}</div>
           <div style={{flex:1,height:1,background:"linear-gradient(90deg,rgba(184,150,12,0.3),transparent)"}}/>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:"rgba(184,150,12,0.6)",letterSpacing:3}}>✦</div>
         </div>
 
         {!editing ? (
           <>
-            {goal?.goal_text ? (
-              <div className="goal-display">"{goal.goal_text}"</div>
-            ) : (
-              <div className="goal-empty">Aún no has definido tu objetivo. ¿Qué quieres manifestar?</div>
-            )}
-            {goal?.updated_at && (
-              <div style={{fontSize:10,color:"rgba(30,20,8,0.3)",marginTop:12,letterSpacing:0.5}}>
-                Última actualización: {new Date(goal.updated_at).toLocaleDateString("es-ES")}
+            {myGoal?.goal_text
+              ? <div className="goal-display">"{myGoal.goal_text}"</div>
+              : <div className="goal-empty">Aún no has definido tu objetivo. ¿Qué quieres manifestar?</div>}
+            {myGoal?.updated_at && (
+              <div style={{fontSize:10,color:"rgba(30,20,8,0.3)",marginTop:10,letterSpacing:0.5}}>
+                Última actualización: {new Date(myGoal.updated_at).toLocaleDateString("es-ES")}
               </div>
             )}
-            <div style={{marginTop:20}}>
+            <div style={{marginTop:16}}>
               <button className="gold-btn" onClick={()=>setEditing(true)}>
-                {goal?.goal_text ? "Actualizar mi objetivo" : "Definir mi objetivo ✦"}
+                {myGoal?.goal_text ? "Actualizar mi objetivo" : "Definir mi objetivo ✦"}
               </button>
             </div>
           </>
@@ -618,20 +706,38 @@ function GoalSection({ member }) {
               onChange={e=>setText(e.target.value)}
               placeholder="Escribe aquí tu objetivo de Manifestadora Experta..."
               autoFocus/>
-            <div style={{display:"flex",gap:10,marginTop:16}}>
-              <button className="ghost-btn" onClick={()=>{ setEditing(false); setText(goal?.goal_text||""); }}>Cancelar</button>
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button className="ghost-btn" onClick={()=>{setEditing(false);setText(myGoal?.goal_text||"");}}>Cancelar</button>
               <button className="gold-btn" onClick={save}>Guardar mi objetivo ✦</button>
             </div>
           </>
         )}
       </div>
 
-      {goal?.goal_text && (
-        <div style={{marginTop:24,padding:"20px 24px",background:"rgba(184,150,12,0.05)",border:"1px solid rgba(184,150,12,0.15)"}}>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:"#B8960C",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Recuerda</div>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"rgba(30,20,8,0.6)",lineHeight:1.7,fontStyle:"italic"}}>
-            Cada acción que registras es un paso hacia tu manifestación. Tu guardiana está contigo en cada momento.
+      {/* GROUP GOALS */}
+      {allGoals.length > 0 && (
+        <div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1E1408",marginBottom:16,borderBottom:"1px solid rgba(184,150,12,0.15)",paddingBottom:8,display:"flex",alignItems:"center",gap:10}}>
+            El objetivo de tus compañeras
+            <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"rgba(184,150,12,0.6)",textTransform:"uppercase"}}>({allGoals.length})</span>
           </div>
+          {allGoals.map(g => (
+            <div key={g.id} style={{background:"#fff",border:"1px solid rgba(184,150,12,0.15)",padding:"18px 20px",marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{width:26,height:26,border:"1px solid rgba(184,150,12,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:"#B8960C",flexShrink:0}}>{g.members?.name?.[0]||"?"}</div>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:"rgba(30,20,8,0.6)",letterSpacing:0.5}}>{g.members?.name||"Compañera"}</div>
+              </div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",fontStyle:"italic",lineHeight:1.5,paddingLeft:36}}>
+                "{g.goal_text}"
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {allGoals.length === 0 && myGoal?.goal_text && (
+        <div style={{textAlign:"center",padding:"32px 0",border:"1px dashed rgba(184,150,12,0.2)"}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"rgba(30,20,8,0.3)",fontStyle:"italic"}}>Aún no hay objetivos de otras compañeras</div>
         </div>
       )}
     </div>
@@ -865,7 +971,7 @@ function MemberView({ session, onExit }) {
             {loading&&<div className="loading">Cargando acciones...</div>}
 
             {!loading&&viewMode==="calendar"&&(
-              <CalendarView actions={filter==="mine"?myActions:filter==="all"?actions:displayed} currentMemberId={member.id}/>
+              <WeeklyCalendar actions={actions} currentMemberId={member.id}/>
             )}
 
             {!loading&&viewMode==="list"&&(
@@ -881,7 +987,7 @@ function MemberView({ session, onExit }) {
         )}
 
         {/* GOAL TAB */}
-        {activeTab==="goal"&&<GoalSection member={member}/>}
+        {activeTab==="goal"&&<GoalSection member={member} groupId={group.id}/>}
       </div>
     </div>
   );
