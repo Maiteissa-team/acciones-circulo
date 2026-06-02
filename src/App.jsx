@@ -1191,8 +1191,19 @@ function AdminView({ session, onExit }) {
   const deleteGroup=async(id)=>{ if(!window.confirm("¿Eliminar este grupo y todas sus alumnas y acciones?")) return; await supabase.from("groups").delete().eq("id",id); load(); };
   const addMembers=async(gid)=>{ if(!newMemberName.trim()) return; const names=newMemberName.split(",").map(n=>n.trim()).filter(Boolean); for(const name of names) await supabase.from("members").insert({group_id:gid,name}); setNewMemberName(""); setShowAddMember(null); load(); };
   const deleteMember=async(id)=>{ await supabase.from("members").delete().eq("id",id); load(); };
+  const [editingGroup, setEditingGroup] = useState(null); // { id, name, guardiana, code }
   const getMembersForGroup=gid=>members.filter(m=>m.group_id===gid);
   const getActionsForGroup=gid=>allActions.filter(a=>a.group_id===gid);
+
+  const saveGroup = async () => {
+    if (!editingGroup?.name?.trim() || !editingGroup?.guardiana?.trim()) return;
+    await supabase.from("groups").update({
+      name: editingGroup.name,
+      guardiana: editingGroup.guardiana,
+      code: editingGroup.code.toUpperCase().replace(/\s/g,"")
+    }).eq("id", editingGroup.id);
+    setEditingGroup(null); load();
+  };
   const thisWeekActions=allActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana");
   const globalActive=members.filter(m=>{ const last=allActions.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]; return last&&daysSince(last.created_at)<=7; }).length;
 
@@ -1261,7 +1272,10 @@ function AdminView({ session, onExit }) {
                   <div className="group-name-lg">{group.name}</div>
                   <div className="group-meta-sm">Guardiana: {group.guardiana}&nbsp;·&nbsp;<span className="code-badge">{group.code}</span>&nbsp;·&nbsp;{grpMembers.length} alumnas</div>
                 </div>
-                <button className="danger-btn" onClick={()=>deleteGroup(group.id)}>Eliminar</button>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="ghost-btn" style={{fontSize:10,padding:"6px 12px",letterSpacing:1}} onClick={()=>setEditingGroup({id:group.id,name:group.name,guardiana:group.guardiana,code:group.code})}>✎ Editar</button>
+                  <button className="danger-btn" onClick={()=>deleteGroup(group.id)}>Eliminar</button>
+                </div>
               </div>
               <div style={{marginBottom:12}}>
                 {grpMembers.map(m=><span key={m.id} className="member-pill">{m.name}<button onClick={()=>deleteMember(m.id)}>✕</button></span>)}
@@ -1281,6 +1295,33 @@ function AdminView({ session, onExit }) {
         })}
         {groups.length===0&&!loading&&<div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay grupos todavía</div></div>}
       </div>
+
+      {/* Edit group modal */}
+      {editingGroup && (
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setEditingGroup(null)}>
+          <div className="modal">
+            <div className="modal-title">Editar grupo</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:9,letterSpacing:2,color:"rgba(30,20,8,0.4)",textTransform:"uppercase",marginBottom:6,fontFamily:"'Montserrat',sans-serif"}}>Nombre del grupo</div>
+                <input value={editingGroup.name} onChange={e=>setEditingGroup(p=>({...p,name:e.target.value}))} className="ci"/>
+              </div>
+              <div>
+                <div style={{fontSize:9,letterSpacing:2,color:"rgba(30,20,8,0.4)",textTransform:"uppercase",marginBottom:6,fontFamily:"'Montserrat',sans-serif"}}>Guardiana</div>
+                <input value={editingGroup.guardiana} onChange={e=>setEditingGroup(p=>({...p,guardiana:e.target.value}))} className="ci"/>
+              </div>
+            </div>
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:9,letterSpacing:2,color:"rgba(30,20,8,0.4)",textTransform:"uppercase",marginBottom:6,fontFamily:"'Montserrat',sans-serif"}}>Código de acceso</div>
+              <input value={editingGroup.code} onChange={e=>setEditingGroup(p=>({...p,code:e.target.value.toUpperCase().replace(/\s/g,"")}))} className="ci"/>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button className="ghost-btn" onClick={()=>setEditingGroup(null)}>Cancelar</button>
+              <button className="gold-btn" onClick={saveGroup}>Guardar cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
