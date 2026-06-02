@@ -1028,19 +1028,30 @@ function GuardianaView({ session, onExit }) {
   const [editingNote, setEditingNote]         = useState(null); // member_id
   const [noteText, setNoteText]               = useState("");
 
+  const [allGroups, setAllGroups]   = useState([]);
+  const [allMembers, setAllMembers] = useState([]);
+  const [allActions, setAllActions] = useState([]);
+
   const loadAll = useCallback(async () => {
-    const [{ data:a },{ data:m },{ data:g },{ data:n }] = await Promise.all([
+    const [{ data:a },{ data:m },{ data:g },{ data:n },{ data:ag },{ data:am },{ data:aa }] = await Promise.all([
       supabase.from("actions").select("*").eq("group_id", group.id).order("action_date", { ascending:true }),
       supabase.from("members").select("*").eq("group_id", group.id).order("name"),
       supabase.from("member_goals").select("*, members(name)").in("member_id",
         (await supabase.from("members").select("id").eq("group_id", group.id)).data?.map(x=>x.id) || []
       ),
       supabase.from("guardiana_notes").select("*").eq("group_id", group.id),
+      // All groups for team view
+      supabase.from("groups").select("*").order("name"),
+      supabase.from("members").select("*"),
+      supabase.from("actions").select("*"),
     ]);
     if (a) setActions(a);
     if (m) { setMembers(m); const exp={}; m.forEach(mb=>{exp[mb.id]=true;}); setExpandedMembers(exp); }
     if (g) setGoals(g);
     if (n) { const map={}; n.forEach(x=>{map[x.member_id]=x.note_text;}); setMemberNotes(map); }
+    if (ag) setAllGroups(ag);
+    if (am) setAllMembers(am);
+    if (aa) setAllActions(aa);
     setLoading(false);
   }, [group.id]);
 
@@ -1153,7 +1164,7 @@ function GuardianaView({ session, onExit }) {
 
         {/* TABS */}
         <div className="member-tabs">
-          {[["acciones","Acciones"],["resumen","Resumen general"],["objetivos","Objetivos"],["rachas","Rachas 🔥"]].map(([id,label])=>(
+          {[["acciones","Acciones"],["resumen","Resumen general"],["objetivos","Objetivos"],["rachas","Rachas 🔥"],["equipo","El equipo"]].map(([id,label])=>(
             <button key={id} className={`mtab${activeTab===id?" active":""}`} onClick={()=>setActiveTab(id)}>{label}</button>
           ))}
         </div>
@@ -1364,6 +1375,106 @@ function GuardianaView({ session, onExit }) {
                 💡 Menciona en la próxima sesión a <strong style={{fontStyle:"normal"}}>{streakRanking[0].member.name}</strong> — lleva <strong style={{fontStyle:"normal"}}>{streakRanking[0].streak} semanas</strong> seguidas tomando acción. ¡Es un ejemplo para el grupo!
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── TAB: EL EQUIPO ── */}
+        {!loading&&activeTab==="equipo"&&(
+          <div>
+            <div style={{marginBottom:20}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:"#B8960C",letterSpacing:3,textTransform:"uppercase",marginBottom:4}}>Visión global</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1E1408",marginBottom:4}}>El equipo de guardianas</div>
+              <div style={{fontSize:11,color:"rgba(30,20,8,0.45)"}}>Progreso de todos los grupos esta semana. Tu grupo aparece destacado.</div>
+            </div>
+
+            {/* Global stats */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
+              {[
+                [allMembers.length,"Alumnas en total"],
+                [allActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana").length,"Acciones esta semana"],
+                [allActions.filter(a=>a.completed).length,"Completadas en total"],
+              ].map(([num,label])=>(
+                <div key={label} style={{background:"#0A0A0A",padding:"18px 14px",textAlign:"center"}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:32,color:"#B8960C",lineHeight:1}}>{num}</div>
+                  <div style={{fontSize:9,letterSpacing:2,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",marginTop:6,fontFamily:"'Montserrat',sans-serif"}}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-group ranking */}
+            {allGroups.map((g,idx) => {
+              const isMyGroup = g.id === group.id;
+              const gMembers = allMembers.filter(m=>m.group_id===g.id);
+              const gActions = allActions.filter(a=>a.group_id===g.id);
+              const gDone = gActions.filter(a=>a.completed).length;
+              const gThisWeek = gActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana"||(a.completed&&a.completed_at&&getWeekLabel(a.completed_at.split("T")[0])==="Esta semana"));
+              const gActive = gMembers.filter(m=>{
+                const last = gActions.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+                return last && daysSince(last.created_at)<=7;
+              }).length;
+              const activePct = gMembers.length>0 ? Math.round(gActive/gMembers.length*100) : 0;
+              const donePct = gActions.length>0 ? Math.round(gDone/gActions.length*100) : 0;
+              const maxThisWeek = Math.max(...allGroups.map(gg => allActions.filter(a=>a.group_id===gg.id&&(getWeekLabel(a.action_date)==="Esta semana"||(a.completed&&a.completed_at&&getWeekLabel(a.completed_at.split("T")[0])==="Esta semana"))).length), 1);
+              const weekPct = Math.round(gThisWeek.length/maxThisWeek*100);
+
+              return (
+                <div key={g.id} style={{
+                  background:"#fff",
+                  border:`1px solid ${isMyGroup?"rgba(184,150,12,0.6)":"rgba(184,150,12,0.18)"}`,
+                  borderLeft:isMyGroup?"3px solid #B8960C":"1px solid rgba(184,150,12,0.18)",
+                  padding:"18px 20px",marginBottom:10,
+                  boxShadow:isMyGroup?"0 2px 16px rgba(184,150,12,0.1)":"none"
+                }}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:"#1E1408"}}>{g.name}</div>
+                        {isMyGroup&&<span style={{fontSize:9,letterSpacing:2,color:"#B8960C",background:"rgba(184,150,12,0.08)",padding:"2px 8px",fontFamily:"'Montserrat',sans-serif",textTransform:"uppercase"}}>Tu grupo</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"rgba(30,20,8,0.4)",letterSpacing:0.5,fontFamily:"'Montserrat',sans-serif"}}>
+                        Guardiana: {g.guardiana} · {gMembers.length} alumnas
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#B8960C",lineHeight:1}}>{gActive}/{gMembers.length}</div>
+                      <div style={{fontSize:9,color:"rgba(30,20,8,0.4)",letterSpacing:1,fontFamily:"'Montserrat',sans-serif"}}>activas esta semana</div>
+                    </div>
+                  </div>
+
+                  {/* Three progress bars */}
+                  {[
+                    ["Alumnas activas esta semana", activePct, "#B8960C"],
+                    ["Acciones completadas (total)", donePct, "#1A6B3C"],
+                    ["Acciones esta semana vs. mejor grupo", weekPct, "#B8960C"],
+                  ].map(([label, pct, color])=>(
+                    <div key={label} style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                        <span style={{fontSize:9,color:"rgba(30,20,8,0.45)",fontFamily:"'Montserrat',sans-serif",letterSpacing:0.5}}>{label}</span>
+                        <span style={{fontSize:9,color:color,fontFamily:"'Montserrat',sans-serif",fontWeight:600}}>{pct}%</span>
+                      </div>
+                      <div style={{background:"#EEE9E0",height:6}}>
+                        <div style={{width:`${pct}%`,height:"100%",background:color,transition:"width 0.4s"}}/>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Quick numbers */}
+                  <div style={{display:"flex",gap:20,marginTop:10,paddingTop:10,borderTop:"1px solid rgba(184,150,12,0.08)"}}>
+                    {[
+                      [gActions.length,"acciones totales"],
+                      [gDone,"completadas"],
+                      [gThisWeek.length,"esta semana"],
+                      [gActions.filter(a=>isOverdue(a.action_date,a.completed)).length,"fuera de plazo"],
+                    ].map(([num,label])=>(
+                      <div key={label} style={{textAlign:"center"}}>
+                        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:label==="fuera de plazo"&&num>0?"#C0392B":"#1E1408"}}>{num}</div>
+                        <div style={{fontSize:9,color:"rgba(30,20,8,0.35)",fontFamily:"'Montserrat',sans-serif",letterSpacing:0.5}}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
