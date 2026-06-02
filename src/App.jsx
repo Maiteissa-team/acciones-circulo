@@ -688,7 +688,7 @@ function GoalSection({ member, groupId }) {
           <>
             {myGoal?.goal_text
               ? <div className="goal-display">"{myGoal.goal_text}"</div>
-              : <div className="goal-empty">Aún no has definido tu objetivo. ¿Qué quieres manifestar?</div>}
+              : <div className="goal-empty">Aún no has definido tu objetivo. Tómate un momento y comparte con tus compis. ¿Cuál es tu objetivo de Manifestadora Experta?</div>}
             {myGoal?.updated_at && (
               <div style={{fontSize:10,color:"rgba(30,20,8,0.3)",marginTop:10,letterSpacing:0.5}}>
                 Última actualización: {new Date(myGoal.updated_at).toLocaleDateString("es-ES")}
