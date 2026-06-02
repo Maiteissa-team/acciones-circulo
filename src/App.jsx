@@ -554,7 +554,7 @@ function WeeklyCalendar({ actions, currentMemberId }) {
                   const over = isOverdue(a.action_date, a.completed);
                   return (
                     <div key={idx}
-                      onClick={()=>setPopup(isOpen&&popup.actionIdx===idx?null:{dayIdx:i,actionIdx:idx,actions:dayActions})}
+                      onClick={()=>setPopup(isOpen?null:{dayIdx:i,actions:dayActions})}
                       style={{
                         padding:"4px 6px",marginBottom:3,cursor:"pointer",
                         background:done?"rgba(26,107,60,0.08)":over?"rgba(192,57,43,0.08)":"rgba(184,150,12,0.08)",
@@ -578,44 +578,48 @@ function WeeklyCalendar({ actions, currentMemberId }) {
                 )}
               </div>
 
-              {/* Popup */}
-              {isOpen && (
-                <div style={{
-                  position:"absolute",top:"100%",left:i>3?undefined:"0",right:i>3?"0":undefined,
-                  zIndex:50,background:"#fff",border:"1px solid rgba(184,150,12,0.3)",
-                  padding:14,minWidth:220,maxWidth:280,
-                  boxShadow:"0 4px 20px rgba(0,0,0,0.12)"
-                }}>
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"#B8960C",textTransform:"uppercase",marginBottom:10}}>
-                    {DAY_LABELS[i]} {day.getDate()} {MONTHS[day.getMonth()]}
-                  </div>
-                  {popup.actions.map((a,idx) => {
-                    const isOwn = a.member_id === currentMemberId;
-                    const done = a.completed;
-                    const over = isOverdue(a.action_date, a.completed);
-                    return (
-                      <div key={idx} style={{marginBottom:10,paddingBottom:10,borderBottom:idx<popup.actions.length-1?"1px solid rgba(184,150,12,0.1)":"none"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                          <div style={{width:18,height:18,border:`1.5px solid ${done?"#1A6B3C":over?"#C0392B":"rgba(184,150,12,0.4)"}`,background:done?"#1A6B3C":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                            {done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
-                          </div>
-                          <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:1,color:done?"#1A6B3C":over?"#C0392B":"#B8960C",textTransform:"uppercase"}}>
-                            {isOwn?"Yo":a.member_name}
-                          </span>
-                        </div>
-                        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:done?"rgba(30,20,8,0.4)":"#1E1408",lineHeight:1.4,textDecoration:done?"line-through":"none",paddingLeft:24}}>
-                          {a.action_text}
-                        </div>
-                        {over&&<div style={{fontSize:9,color:"#C0392B",letterSpacing:1,marginTop:3,paddingLeft:24}}>FUERA DE PLAZO</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+{/* Popup rendered outside column via portal-style fixed overlay */}
             </div>
           );
         })}
       </div>
+
+      {/* Day popup — rendered at calendar level to avoid clipping */}
+      {popup && (
+        <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"rgba(0,0,0,0.25)"}}
+          onClick={()=>setPopup(null)}>
+          <div style={{background:"#fff",border:"1px solid rgba(184,150,12,0.3)",padding:20,width:"100%",maxWidth:340,maxHeight:"70vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"#B8960C",textTransform:"uppercase"}}>
+                {DAY_LABELS[popup.dayIdx]} {days[popup.dayIdx].getDate()} {MONTHS[days[popup.dayIdx].getMonth()]}
+              </div>
+              <button onClick={()=>setPopup(null)} style={{background:"none",border:"none",color:"rgba(30,20,8,0.3)",cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
+            </div>
+            {popup.actions.map((a,idx) => {
+              const isOwn = a.member_id === currentMemberId;
+              const done = a.completed;
+              const over = isOverdue(a.action_date, a.completed);
+              return (
+                <div key={idx} style={{marginBottom:12,paddingBottom:12,borderBottom:idx<popup.actions.length-1?"1px solid rgba(184,150,12,0.1)":"none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <div style={{width:20,height:20,border:`1.5px solid ${done?"#1A6B3C":over?"#C0392B":"rgba(184,150,12,0.4)"}`,background:done?"#1A6B3C":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {done&&<span style={{color:"#fff",fontSize:11,fontWeight:700}}>✓</span>}
+                    </div>
+                    <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:1.5,color:done?"#1A6B3C":over?"#C0392B":"#B8960C",textTransform:"uppercase",fontWeight:600}}>
+                      {isOwn?"Yo ✦":a.member_name}
+                    </span>
+                  </div>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:done?"rgba(30,20,8,0.4)":"#1E1408",lineHeight:1.5,textDecoration:done?"line-through":"none",paddingLeft:28}}>
+                    {a.action_text}
+                  </div>
+                  {over&&<div style={{fontSize:9,color:"#C0392B",letterSpacing:1,marginTop:4,paddingLeft:28,fontFamily:"'Montserrat',sans-serif"}}>⚠ FUERA DE PLAZO</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div style={{display:"flex",gap:16,padding:"10px 16px",borderTop:"1px solid rgba(184,150,12,0.08)"}}>
@@ -1009,88 +1013,137 @@ function MemberView({ session, onExit }) {
 // ─── GUARDIANA VIEW ───────────────────────────────────
 function GuardianaView({ session, onExit }) {
   const { group } = session;
-  const [actions, setActions] = useState([]);
-  const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-  const [weekFilter, setWeekFilter] = useState("all");
+  const [actions, setActions]           = useState([]);
+  const [members, setMembers]           = useState([]);
+  const [goals, setGoals]               = useState([]);
+  const [memberNotes, setMemberNotes]   = useState({}); // { member_id: note_text }
+  const [loading, setLoading]           = useState(true);
+  const [activeTab, setActiveTab]       = useState("acciones");
+  const [filter, setFilter]             = useState("all");
+  const [weekFilter, setWeekFilter]     = useState("all");
+  const [memberFilter, setMemberFilter] = useState("all");
   const [expandedMembers, setExpandedMembers] = useState({});
-  const [showQuickView, setShowQuickView] = useState(false);
-  const [showExport, setShowExport] = useState(false);
+  const [showQuickView, setShowQuickView]     = useState(false);
+  const [showExport, setShowExport]           = useState(false);
+  const [editingNote, setEditingNote]         = useState(null); // member_id
+  const [noteText, setNoteText]               = useState("");
 
   const loadAll = useCallback(async () => {
-    const [{ data:a },{ data:m }] = await Promise.all([
-      supabase.from("actions").select("*").eq("group_id",group.id).order("action_date",{ascending:true}),
-      supabase.from("members").select("*").eq("group_id",group.id).order("name")
+    const [{ data:a },{ data:m },{ data:g },{ data:n }] = await Promise.all([
+      supabase.from("actions").select("*").eq("group_id", group.id).order("action_date", { ascending:true }),
+      supabase.from("members").select("*").eq("group_id", group.id).order("name"),
+      supabase.from("member_goals").select("*, members(name)").in("member_id",
+        (await supabase.from("members").select("id").eq("group_id", group.id)).data?.map(x=>x.id) || []
+      ),
+      supabase.from("guardiana_notes").select("*").eq("group_id", group.id),
     ]);
-    if(a) setActions(a);
-    if(m){ setMembers(m); const exp={}; m.forEach(mb=>{exp[mb.id]=true;}); setExpandedMembers(exp); }
+    if (a) setActions(a);
+    if (m) { setMembers(m); const exp={}; m.forEach(mb=>{exp[mb.id]=true;}); setExpandedMembers(exp); }
+    if (g) setGoals(g);
+    if (n) { const map={}; n.forEach(x=>{map[x.member_id]=x.note_text;}); setMemberNotes(map); }
     setLoading(false);
-  },[group.id]);
+  }, [group.id]);
 
-  useEffect(()=>{
+  useEffect(() => {
     loadAll();
-    const sub=supabase.channel(`guard-${group.id}`)
-      .on("postgres_changes",{event:"*",schema:"public",table:"actions",filter:`group_id=eq.${group.id}`},loadAll)
+    const sub = supabase.channel(`guard-${group.id}`)
+      .on("postgres_changes", {event:"*",schema:"public",table:"actions",filter:`group_id=eq.${group.id}`}, loadAll)
       .subscribe();
-    return ()=>supabase.removeChannel(sub);
-  },[loadAll]);
+    return () => supabase.removeChannel(sub);
+  }, [loadAll]);
 
-  const toggleMember = id=>setExpandedMembers(p=>({...p,[id]:!p[id]}));
+  const saveNote = async (memberId) => {
+    const existing = await supabase.from("guardiana_notes").select("id").eq("member_id", memberId).eq("group_id", group.id).single();
+    if (existing.data) {
+      await supabase.from("guardiana_notes").update({ note_text: noteText }).eq("id", existing.data.id);
+    } else {
+      await supabase.from("guardiana_notes").insert({ member_id: memberId, group_id: group.id, note_text: noteText });
+    }
+    setEditingNote(null); setNoteText(""); loadAll();
+  };
+
+  // Derived data
   const lastActionDate = {};
-  actions.forEach(a=>{ if(!lastActionDate[a.member_id]||new Date(a.created_at)>new Date(lastActionDate[a.member_id])) lastActionDate[a.member_id]=a.created_at; });
+  actions.forEach(a => { if (!lastActionDate[a.member_id] || new Date(a.created_at) > new Date(lastActionDate[a.member_id])) lastActionDate[a.member_id] = a.created_at; });
 
-  const totalDone=actions.filter(a=>a.completed).length;
-  const overdueTotal=actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
-  const inactiveCount=members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).length;
-  const allWeeks=[...new Set(actions.map(a=>getWeekLabel(a.action_date)))];
+  const totalDone    = actions.filter(a=>a.completed).length;
+  const overdueTotal = actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
+  const inactiveCount = members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).length;
+  const allWeeks = [...new Set(actions.map(a=>getWeekLabel(a.action_date)))];
 
-  let filteredActions=actions;
-  if(filter==="pending") filteredActions=filteredActions.filter(a=>!a.completed);
-  if(filter==="done") filteredActions=filteredActions.filter(a=>a.completed);
-  if(filter==="overdue") filteredActions=filteredActions.filter(a=>isOverdue(a.action_date,a.completed));
-  if(weekFilter!=="all") filteredActions=filteredActions.filter(a=>getWeekLabel(a.action_date)===weekFilter);
+  // Member stats for summary tab
+  const memberStats = members.map(m => {
+    const mActions = actions.filter(a=>a.member_id===m.id);
+    const mDone = mActions.filter(a=>a.completed).length;
+    const mThisWeek = mActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana"||
+      (a.completed&&a.completed_at&&getWeekLabel(a.completed_at.split("T")[0])==="Esta semana"));
+    const mStreak = streak(mActions);
+    const mGoal = goals.find(g=>g.member_id===m.id);
+    const mInactive = !lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7;
+    const mNote = memberNotes[m.id];
+    return { member:m, total:mActions.length, done:mDone, thisWeek:mThisWeek.length,
+      streak:mStreak, hasGoal:!!mGoal?.goal_text, goal:mGoal?.goal_text||"",
+      inactive:mInactive, note:mNote };
+  }).sort((a,b)=>{
+    if(a.inactive&&!b.inactive) return -1;
+    if(!a.inactive&&b.inactive) return 1;
+    return a.member.name.localeCompare(b.member.name);
+  });
 
-  const byMember={};
-  filteredActions.forEach(a=>{
-    if(!byMember[a.member_id]){ const fm=members.find(m=>m.id===a.member_id); byMember[a.member_id]={member:fm||{id:a.member_id,name:a.member_name},actions:[]}; }
+  // Streak ranking
+  const streakRanking = [...memberStats].sort((a,b)=>b.streak-a.streak);
+
+  // Actions filtering
+  let filteredActions = actions;
+  if (filter==="pending")  filteredActions = filteredActions.filter(a=>!a.completed);
+  if (filter==="done")     filteredActions = filteredActions.filter(a=>a.completed);
+  if (filter==="overdue")  filteredActions = filteredActions.filter(a=>isOverdue(a.action_date,a.completed));
+  if (weekFilter!=="all")  filteredActions = filteredActions.filter(a=>getWeekLabel(a.action_date)===weekFilter);
+  if (memberFilter!=="all") filteredActions = filteredActions.filter(a=>String(a.member_id)===String(memberFilter));
+
+  const byMember = {};
+  filteredActions.forEach(a => {
+    if (!byMember[a.member_id]) { const fm=members.find(m=>m.id===a.member_id); byMember[a.member_id]={member:fm||{id:a.member_id,name:a.member_name},actions:[]}; }
     byMember[a.member_id].actions.push(a);
   });
-  if (filter === "all" && weekFilter === "all") {
-    members.forEach(m => {
-      if (!byMember[m.id]) byMember[m.id] = { member: m, actions: [] };
-    });
+  if (filter==="all" && weekFilter==="all" && memberFilter==="all") {
+    members.forEach(m => { if (!byMember[m.id]) byMember[m.id]={member:m,actions:[]}; });
   }
 
-  const groupByWeek=acts=>{ const map={}; acts.forEach(a=>{const w=getWeekLabel(a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
+  const groupByWeek = acts => { const map={}; acts.forEach(a=>{const w=getWeekLabel(a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
 
   return (
     <div className="app">
       {showQuickView&&<QuickViewModal actions={actions} members={members} onClose={()=>setShowQuickView(false)}/>}
       {showExport&&<ExportModal group={group} actions={actions} members={members} onClose={()=>setShowExport(false)}/>}
+
       <Header title={`${group.name} — Guardiana`} user={group.guardiana} onExit={onExit}/>
       <div className="main">
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:28}}>
+
+        {/* Page header + action buttons */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:20}}>
           <div style={{borderLeft:"2px solid #B8960C",paddingLeft:20}}>
             <div className="page-eyebrow">Panel de guardiana</div>
-            <div className="page-title">Seguimiento del grupo</div>
-            <div className="page-sub">{group.name} · {members.length} alumnas · {actions.length} acciones</div>
+            <div className="page-title">{group.name}</div>
+            <div className="page-sub">{members.length} alumnas · {actions.length} acciones</div>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,paddingTop:4}}>
             <button className="ghost-btn" style={{fontSize:10,letterSpacing:1.5,padding:"8px 14px"}} onClick={()=>setShowQuickView(true)}>⚡ Vista sesión</button>
-            <button className="ghost-btn" style={{fontSize:10,letterSpacing:1.5,padding:"8px 14px"}} onClick={()=>setShowExport(true)}>📋 Resumen semanal</button>
+            <button className="ghost-btn" style={{fontSize:10,letterSpacing:1.5,padding:"8px 14px"}} onClick={()=>setShowExport(true)}>📋 Resumen</button>
           </div>
         </div>
 
+        {/* Stats */}
         <div className="stats-row">
           <div className="stat-card"><div className="stat-num">{actions.length}</div><div className="stat-label">Acciones totales</div></div>
           <div className="stat-card"><div className="stat-num" style={{color:"#1A6B3C"}}>{totalDone}</div><div className="stat-label">Completadas ✓</div></div>
-          <div className="stat-card"><div className="stat-num" style={{color:overdueTotal>0?"#C0392B":"#B8960C"}}>{overdueTotal}</div><div className="stat-label">Fuera de plazo ⚠</div></div>
+          <div className="stat-card"><div className="stat-num" style={{color:overdueTotal>0?"#C0392B":"#B8960C"}}>{overdueTotal}</div><div className="stat-label">Fuera de plazo</div></div>
           <div className="stat-card"><div className="stat-num" style={{color:inactiveCount>0?"#C0392B":"#1A6B3C"}}>{inactiveCount}</div><div className="stat-label">Sin actividad 7d</div></div>
         </div>
 
+        {/* Inactivity alert */}
         {inactiveCount>0&&(
-          <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.2)",padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.2)",padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:16}}>⚠️</span>
             <span style={{fontSize:12,color:"#C0392B"}}>
               {members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).map(m=>m.name).join(", ")} — sin actividad en los últimos 7 días
@@ -1098,70 +1151,222 @@ function GuardianaView({ session, onExit }) {
           </div>
         )}
 
-        <div className="filter-row">
-          {[["all","Todas"],["pending","Pendientes"],["done","Completadas"],["overdue","Fuera de plazo ⚠"]].map(([id,label])=>(
-            <button key={id} className={`ftab${filter===id?" active":""}`} onClick={()=>setFilter(id)}>{label}</button>
+        {/* TABS */}
+        <div className="member-tabs">
+          {[["acciones","Acciones"],["resumen","Resumen general"],["objetivos","Objetivos"],["rachas","Rachas 🔥"]].map(([id,label])=>(
+            <button key={id} className={`mtab${activeTab===id?" active":""}`} onClick={()=>setActiveTab(id)}>{label}</button>
           ))}
-          {allWeeks.length>0&&<>
-            <div className="filter-divider"/>
-            <button className={`ftab${weekFilter==="all"?" active":""}`} onClick={()=>setWeekFilter("all")}>Todas las semanas</button>
-            {allWeeks.map(w=><button key={w} className={`ftab${weekFilter===w?" active":""}`} onClick={()=>setWeekFilter(w)}>{w}</button>)}
-          </>}
         </div>
 
         {loading&&<div className="loading">Cargando...</div>}
-        {!loading&&Object.values(byMember).length===0&&<div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay acciones en este filtro</div></div>}
 
-        {Object.values(byMember)
-          .sort((a,b)=>{
-            const aI=!lastActionDate[a.member.id]||daysSince(lastActionDate[a.member.id])>7;
-            const bI=!lastActionDate[b.member.id]||daysSince(lastActionDate[b.member.id])>7;
-            if(aI&&!bI) return -1; if(!aI&&bI) return 1;
-            return a.member.name.localeCompare(b.member.name);
-          })
-          .map(({member:mb,actions:acts})=>{
-            const done=acts.filter(a=>a.completed).length;
-            const pct=acts.length>0?Math.round(done/acts.length*100):0;
-            const isExpanded=expandedMembers[mb.id];
-            const isInactive=!lastActionDate[mb.id]||daysSince(lastActionDate[mb.id])>7;
-            const memberStreak=streak(actions.filter(a=>a.member_id===mb.id));
-            const byWeek=groupByWeek(acts);
-            return (
-              <div key={mb.id} className={`member-block${isInactive?" inactive":""}`}>
-                <div className="member-header" onClick={()=>toggleMember(mb.id)}>
-                  <div className={`member-avatar${isInactive?" inactive":""}`}>{mb.name[0]}</div>
-                  <div className="member-info">
-                    <div className="member-name-lg">
-                      {mb.name}
-                      {isInactive&&<span className="inactive-badge">Sin actividad</span>}
-                      {!isInactive&&memberStreak>1&&<span className="streak-badge">🔥 {memberStreak} semanas</span>}
+        {/* ── TAB: ACCIONES ── */}
+        {!loading&&activeTab==="acciones"&&(
+          <>
+            <div className="filter-row">
+              {/* Status filters */}
+              {[["all","Todas"],["pending","Pendientes"],["done","Completadas"],["overdue","Fuera de plazo"]].map(([id,label])=>(
+                <button key={id} className={`ftab${filter===id?" active":""}`} onClick={()=>setFilter(id)}>{label}</button>
+              ))}
+              <div className="filter-divider"/>
+              {/* Member filter */}
+              <select value={memberFilter} onChange={e=>setMemberFilter(e.target.value)}
+                style={{padding:"6px 12px",fontFamily:"'Montserrat',sans-serif",fontSize:10,letterSpacing:1,border:"1px solid rgba(184,150,12,0.35)",background:"transparent",color:"rgba(30,20,10,0.6)",cursor:"pointer",outline:"none"}}>
+                <option value="all">Todas las alumnas</option>
+                {members.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              {/* Week filter */}
+              {allWeeks.length>0&&<>
+                <div className="filter-divider"/>
+                <button className={`ftab${weekFilter==="all"?" active":""}`} onClick={()=>setWeekFilter("all")}>Todas las semanas</button>
+                {allWeeks.map(w=><button key={w} className={`ftab${weekFilter===w?" active":""}`} onClick={()=>setWeekFilter(w)}>{w}</button>)}
+              </>}
+            </div>
+
+            {Object.values(byMember).length===0&&<div className="empty"><div className="empty-icon">◇</div><div className="empty-text">No hay acciones en este filtro</div></div>}
+
+            {Object.values(byMember)
+              .sort((a,b)=>{ const aI=!lastActionDate[a.member.id]||daysSince(lastActionDate[a.member.id])>7; const bI=!lastActionDate[b.member.id]||daysSince(lastActionDate[b.member.id])>7; if(aI&&!bI) return -1; if(!aI&&bI) return 1; return a.member.name.localeCompare(b.member.name); })
+              .map(({member:mb,actions:acts})=>{
+                const done=acts.filter(a=>a.completed).length;
+                const pct=acts.length>0?Math.round(done/acts.length*100):0;
+                const isExpanded=expandedMembers[mb.id];
+                const isInactive=!lastActionDate[mb.id]||daysSince(lastActionDate[mb.id])>7;
+                const memberStreak=streak(actions.filter(a=>a.member_id===mb.id));
+                const byWeek=groupByWeek(acts);
+                return (
+                  <div key={mb.id} className={`member-block${isInactive?" inactive":""}`}>
+                    <div className="member-header" onClick={()=>setExpandedMembers(p=>({...p,[mb.id]:!p[mb.id]}))}>
+                      <div className={`member-avatar${isInactive?" inactive":""}`}>{mb.name[0]}</div>
+                      <div className="member-info">
+                        <div className="member-name-lg">
+                          {mb.name}
+                          {isInactive&&<span className="inactive-badge">Sin actividad</span>}
+                          {!isInactive&&memberStreak>1&&<span className="streak-badge">🔥 {memberStreak} sem.</span>}
+                        </div>
+                        <div className="member-counts">{done}/{acts.length} completadas · {pct}%</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                        <div style={{width:80}}><div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`,background:pct===100?"#1A6B3C":isInactive?"#C0392B":"#B8960C"}}/></div></div>
+                        <div style={{color:"#B8960C",fontSize:11,opacity:0.6}}>{isExpanded?"▲":"▼"}</div>
+                      </div>
                     </div>
-                    <div className="member-counts">{done}/{acts.length} completadas · {pct}%{acts.filter(a=>isOverdue(a.action_date,a.completed)).length>0?` · ${acts.filter(a=>isOverdue(a.action_date,a.completed)).length} fuera de plazo`:""}</div>
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                    <div style={{width:100}}>
-                      <div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`,background:pct===100?"#1A6B3C":isInactive?"#C0392B":"#B8960C"}}/></div>
-                    </div>
-                    <div style={{color:"#B8960C",fontSize:11,opacity:0.6,width:12}}>{isExpanded?"▲":"▼"}</div>
-                  </div>
-                </div>
-                {isExpanded&&(
-                  <div>
-                    {acts.length===0&&<div style={{padding:"14px 18px",fontSize:12,color:"rgba(30,20,8,0.35)",fontStyle:"italic",borderTop:"1px solid rgba(184,150,12,0.08)"}}>{isInactive?"Esta alumna no ha registrado acciones recientemente.":"Sin acciones en este filtro."}</div>}
-                    {Object.entries(byWeek).map(([week,wActs])=>(
-                      <div key={week} className="week-group">
-                        <div className="week-label">{week} · {wActs.filter(a=>a.completed).length}/{wActs.length} completadas</div>
-                        {wActs.map(action=>(
-                          <ActionCard key={action.id} action={action} currentMemberId={null} onToggle={null} onEdit={null}
-                            showName={false} isGuardiana={true} onComment={loadAll}/>
+                    {isExpanded&&(
+                      <div>
+                        {acts.length===0&&<div style={{padding:"12px 18px",fontSize:12,color:"rgba(30,20,8,0.35)",fontStyle:"italic",borderTop:"1px solid rgba(184,150,12,0.08)"}}>Sin acciones en este filtro.</div>}
+                        {Object.entries(byWeek).map(([week,wActs])=>(
+                          <div key={week} className="week-group">
+                            <div className="week-label">{week} · {wActs.filter(a=>a.completed).length}/{wActs.length}</div>
+                            {wActs.map(action=><ActionCard key={action.id} action={action} currentMemberId={null} onToggle={null} onEdit={null} showName={false} isGuardiana={true} onComment={loadAll}/>)}
+                          </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                );
+              })}
+          </>
+        )}
+
+        {/* ── TAB: RESUMEN GENERAL ── */}
+        {!loading&&activeTab==="resumen"&&(
+          <div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",background:"#fff",border:"1px solid rgba(184,150,12,0.18)"}}>
+                <thead>
+                  <tr style={{background:"#0A0A0A"}}>
+                    {["Alumna","Acciones","Completadas","Esta semana","Racha","Objetivo","Última actividad","Nota"].map(h=>(
+                      <th key={h} style={{padding:"10px 14px",fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"rgba(184,150,12,0.8)",textTransform:"uppercase",textAlign:"left",whiteSpace:"nowrap",borderRight:"1px solid rgba(184,150,12,0.1)"}}>{h}</th>
                     ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {memberStats.map((s,idx)=>(
+                    <tr key={s.member.id} style={{background:s.inactive?"rgba(192,57,43,0.03)":idx%2===0?"#fff":"rgba(184,150,12,0.02)",borderBottom:"1px solid rgba(184,150,12,0.08)"}}>
+                      {/* Name */}
+                      <td style={{padding:"12px 14px",borderRight:"1px solid rgba(184,150,12,0.08)"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{width:24,height:24,border:`1px solid ${s.inactive?"#C0392B":"#B8960C"}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:12,color:s.inactive?"#C0392B":"#B8960C",flexShrink:0}}>{s.member.name[0]}</div>
+                          <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:"#1E1408"}}>{s.member.name}</span>
+                          {s.inactive&&<span className="inactive-badge">!</span>}
+                        </div>
+                      </td>
+                      {/* Total */}
+                      <td style={{padding:"12px 14px",textAlign:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:"#B8960C",borderRight:"1px solid rgba(184,150,12,0.08)"}}>{s.total}</td>
+                      {/* Done */}
+                      <td style={{padding:"12px 14px",textAlign:"center",borderRight:"1px solid rgba(184,150,12,0.08)"}}>
+                        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:s.done===s.total&&s.total>0?"#1A6B3C":"#1E1408"}}>{s.done}</span>
+                        <span style={{fontSize:10,color:"rgba(30,20,8,0.35)",marginLeft:3}}>/{s.total}</span>
+                      </td>
+                      {/* This week */}
+                      <td style={{padding:"12px 14px",textAlign:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:s.thisWeek>0?"#1A6B3C":"rgba(30,20,8,0.3)",borderRight:"1px solid rgba(184,150,12,0.08)"}}>{s.thisWeek}</td>
+                      {/* Streak */}
+                      <td style={{padding:"12px 14px",textAlign:"center",borderRight:"1px solid rgba(184,150,12,0.08)"}}>
+                        {s.streak>0?<span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#B8960C"}}>🔥 {s.streak}</span>:<span style={{fontSize:12,color:"rgba(30,20,8,0.25)"}}>—</span>}
+                      </td>
+                      {/* Goal */}
+                      <td style={{padding:"12px 14px",borderRight:"1px solid rgba(184,150,12,0.08)",maxWidth:200}}>
+                        {s.hasGoal
+                          ? <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:"#1E1408",fontStyle:"italic",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>"{s.goal}"</div>
+                          : <span style={{fontSize:10,color:"#C0392B",letterSpacing:1,fontFamily:"'Montserrat',sans-serif"}}>Sin definir</span>}
+                      </td>
+                      {/* Last activity */}
+                      <td style={{padding:"12px 14px",textAlign:"center",borderRight:"1px solid rgba(184,150,12,0.08)"}}>
+                        {lastActionDate[s.member.id]
+                          ? <span style={{fontSize:11,color:s.inactive?"#C0392B":"rgba(30,20,8,0.5)",fontFamily:"'Montserrat',sans-serif"}}>hace {daysSince(lastActionDate[s.member.id])}d</span>
+                          : <span style={{fontSize:10,color:"rgba(30,20,8,0.25)"}}>—</span>}
+                      </td>
+                      {/* Note */}
+                      <td style={{padding:"12px 14px",minWidth:180}}>
+                        {editingNote===s.member.id ? (
+                          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                            <input value={noteText} onChange={e=>setNoteText(e.target.value)}
+                              onKeyDown={e=>e.key==="Enter"&&saveNote(s.member.id)}
+                              style={{flex:1,padding:"5px 8px",border:"1px solid rgba(184,150,12,0.3)",fontSize:11,fontFamily:"'Montserrat',sans-serif",outline:"none",background:"#FAF7F2",color:"#1E1408"}}
+                              placeholder="Nota privada..." autoFocus/>
+                            <button onClick={()=>saveNote(s.member.id)} className="comment-send-btn" style={{padding:"5px 10px",fontSize:10}}>✓</button>
+                            <button onClick={()=>setEditingNote(null)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(30,20,8,0.4)",fontSize:14}}>✕</button>
+                          </div>
+                        ) : (
+                          <div style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}} onClick={()=>{setEditingNote(s.member.id);setNoteText(s.note||"");}}>
+                            {s.note
+                              ? <span style={{fontSize:11,color:"rgba(30,20,8,0.6)",fontStyle:"italic",fontFamily:"'Cormorant Garamond',serif",flex:1,lineHeight:1.3}}>{s.note}</span>
+                              : <span style={{fontSize:10,color:"rgba(184,150,12,0.5)",letterSpacing:1,fontFamily:"'Montserrat',sans-serif"}}>+ Añadir nota</span>}
+                            <span style={{fontSize:10,color:"rgba(184,150,12,0.4)",flexShrink:0}}>✎</span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{fontSize:10,color:"rgba(30,20,8,0.3)",marginTop:10,fontFamily:"'Montserrat',sans-serif",fontStyle:"italic"}}>
+              * Las notas son privadas — solo las ve la guardiana.
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB: OBJETIVOS ── */}
+        {!loading&&activeTab==="objetivos"&&(
+          <div>
+            <div style={{marginBottom:20,fontSize:11,color:"rgba(30,20,8,0.45)"}}>
+              {goals.filter(g=>g.goal_text).length}/{members.length} alumnas han definido su objetivo
+            </div>
+            {memberStats.map(s=>(
+              <div key={s.member.id} style={{background:"#fff",border:`1px solid ${s.hasGoal?"rgba(184,150,12,0.2)":"rgba(192,57,43,0.2)"}`,padding:"18px 20px",marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:s.hasGoal?10:0}}>
+                  <div style={{width:28,height:28,border:`1px solid ${s.hasGoal?"#B8960C":"#C0392B"}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:s.hasGoal?"#B8960C":"#C0392B",flexShrink:0}}>{s.member.name[0]}</div>
+                  <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#1E1408"}}>{s.member.name}</span>
+                  {!s.hasGoal&&<span style={{fontSize:9,letterSpacing:1.5,color:"#C0392B",background:"rgba(192,57,43,0.08)",padding:"2px 7px",fontFamily:"'Montserrat',sans-serif",textTransform:"uppercase"}}>Sin definir</span>}
+                </div>
+                {s.hasGoal&&(
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",fontStyle:"italic",lineHeight:1.6,paddingLeft:38}}>
+                    "{s.goal}"
                   </div>
                 )}
               </div>
-            );
-          })}
+            ))}
+          </div>
+        )}
+
+        {/* ── TAB: RACHAS ── */}
+        {!loading&&activeTab==="rachas"&&(
+          <div>
+            <div style={{marginBottom:20,fontSize:11,color:"rgba(30,20,8,0.45)"}}>
+              Semanas consecutivas con al menos una acción registrada
+            </div>
+            {streakRanking.map((s,idx)=>{
+              const pct = streakRanking[0].streak > 0 ? Math.round(s.streak/streakRanking[0].streak*100) : 0;
+              const medals = ["🥇","🥈","🥉"];
+              return (
+                <div key={s.member.id} style={{background:"#fff",border:`1px solid ${idx===0?"rgba(184,150,12,0.5)":"rgba(184,150,12,0.18)"}`,padding:"16px 20px",marginBottom:8,display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,width:32,textAlign:"center",flexShrink:0}}>
+                    {idx<3 ? medals[idx] : <span style={{color:"rgba(30,20,8,0.3)",fontSize:14}}>#{idx+1}</span>}
+                  </div>
+                  <div style={{width:32,height:32,border:`1px solid ${s.streak>0?"#B8960C":"rgba(30,20,8,0.2)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:s.streak>0?"#B8960C":"rgba(30,20,8,0.3)",flexShrink:0}}>{s.member.name[0]}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",marginBottom:5}}>{s.member.name}</div>
+                    <div className="progress-bar" style={{height:8}}>
+                      <div className="progress-fill" style={{width:`${pct}%`,background:idx===0?"#B8960C":idx===1?"rgba(184,150,12,0.7)":"rgba(184,150,12,0.4)"}}/>
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    {s.streak>0
+                      ? <div><span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:"#B8960C"}}>🔥 {s.streak}</span><div style={{fontSize:9,color:"rgba(30,20,8,0.4)",letterSpacing:1,fontFamily:"'Montserrat',sans-serif",marginTop:2}}>semanas</div></div>
+                      : <span style={{fontSize:12,color:"rgba(30,20,8,0.3)",fontStyle:"italic",fontFamily:"'Cormorant Garamond',serif"}}>Sin racha</span>}
+                  </div>
+                </div>
+              );
+            })}
+            {streakRanking[0]?.streak>0&&(
+              <div style={{marginTop:16,padding:"14px 18px",background:"rgba(184,150,12,0.05)",border:"1px solid rgba(184,150,12,0.15)",fontSize:12,color:"rgba(30,20,8,0.6)",fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",lineHeight:1.6}}>
+                💡 Menciona en la próxima sesión a <strong style={{fontStyle:"normal"}}>{streakRanking[0].member.name}</strong> — lleva <strong style={{fontStyle:"normal"}}>{streakRanking[0].streak} semanas</strong> seguidas tomando acción. ¡Es un ejemplo para el grupo!
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
