@@ -714,6 +714,18 @@ function GoalSection({ member, groupId }) {
         )}
       </div>
 
+      {/* Motivational message */}
+      {myGoal?.goal_text && (
+        <div style={{marginTop:16,padding:"18px 24px",background:"#0A0A0A",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,right:0,fontFamily:"'Cormorant Garamond',serif",fontSize:80,color:"rgba(184,150,12,0.06)",lineHeight:1,pointerEvents:"none",userSelect:"none"}}>✦</div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:4,color:"rgba(184,150,12,0.6)",textTransform:"uppercase",marginBottom:8}}>Recuerda</div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"rgba(255,255,255,0.85)",lineHeight:1.75,fontStyle:"italic",position:"relative",zIndex:1}}>
+            Este es tu compromiso contigo misma.<br/>
+            <span style={{color:"#B8960C"}}>Cada acción que tomas desde hoy te acerca un paso más a vivir la vida que ya sabes que es para ti.</span>
+          </div>
+        </div>
+      )}
+
       {/* GROUP GOALS */}
       {allGoals.length > 0 && (
         <div>
@@ -741,17 +753,6 @@ function GoalSection({ member, groupId }) {
         </div>
       )}
 
-      {/* Motivational message */}
-      {myGoal?.goal_text && (
-        <div style={{marginTop:28,padding:"22px 28px",background:"#0A0A0A",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,right:0,fontFamily:"'Cormorant Garamond',serif",fontSize:80,color:"rgba(184,150,12,0.06)",lineHeight:1,pointerEvents:"none",userSelect:"none"}}>✦</div>
-          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:4,color:"rgba(184,150,12,0.6)",textTransform:"uppercase",marginBottom:10}}>Recuerda</div>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,color:"rgba(255,255,255,0.85)",lineHeight:1.75,fontStyle:"italic",position:"relative",zIndex:1}}>
-            Este es tu compromiso contigo misma.<br/>
-            <span style={{color:"#B8960C"}}>Cada acción que tomas desde hoy te acerca un paso más a vivir la vida que ya sabes que es para ti.</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
