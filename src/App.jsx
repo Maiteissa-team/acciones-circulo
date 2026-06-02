@@ -937,7 +937,11 @@ function GuardianaView({ session, onExit }) {
     if(!byMember[a.member_id]){ const fm=members.find(m=>m.id===a.member_id); byMember[a.member_id]={member:fm||{id:a.member_id,name:a.member_name},actions:[]}; }
     byMember[a.member_id].actions.push(a);
   });
-  if(filter==="all"&&weekFilter==="all"){ members.forEach(m=>{if(!byMember[m.id]) byMember[m.id]={member:m,actions:[];};}); }
+  if (filter === "all" && weekFilter === "all") {
+    members.forEach(m => {
+      if (!byMember[m.id]) byMember[m.id] = { member: m, actions: [] };
+    });
+  }
 
   const groupByWeek=acts=>{ const map={}; acts.forEach(a=>{const w=getWeekLabel(a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
 
