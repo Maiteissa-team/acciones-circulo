@@ -638,21 +638,28 @@ function WeeklyCalendar({ actions, currentMemberId }) {
 function GoalSection({ member, groupId }) {
   const [myGoal, setMyGoal] = useState(null);
   const [allGoals, setAllGoals] = useState([]);
+  const [goalComments, setGoalComments] = useState({}); // member_id -> comment_text
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    // Load my goal
     const { data: mine } = await supabase.from("member_goals").select("*").eq("member_id", member.id).single();
     if (mine) { setMyGoal(mine); setText(mine.goal_text); }
 
-    // Load all goals from group members
     const { data: members } = await supabase.from("members").select("*").eq("group_id", groupId);
     if (members) {
       const ids = members.map(m => m.id);
       const { data: goals } = await supabase.from("member_goals").select("*, members(name)").in("member_id", ids);
       if (goals) setAllGoals(goals.filter(g => g.member_id !== member.id && g.goal_text));
+
+      // Load guardiana comments for all goals in group
+      const { data: comments } = await supabase.from("goal_comments").select("*").in("member_id", ids);
+      if (comments) {
+        const map = {};
+        comments.forEach(c => { map[c.member_id] = c.comment_text; });
+        setGoalComments(map);
+      }
     }
     setLoading(false);
   }, [member.id, groupId]);
@@ -746,6 +753,12 @@ function GoalSection({ member, groupId }) {
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",fontStyle:"italic",lineHeight:1.5,paddingLeft:36}}>
                 "{g.goal_text}"
               </div>
+              {goalComments[g.member_id] && (
+                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(184,150,12,0.1)",paddingLeft:36}}>
+                  <div style={{fontSize:9,letterSpacing:2,color:"rgba(30,20,8,0.35)",textTransform:"uppercase",fontFamily:"'Montserrat',sans-serif",marginBottom:4}}>Nota de tu guardiana</div>
+                  <div style={{fontSize:12,color:"rgba(30,20,8,0.6)",fontStyle:"italic",fontFamily:"'Cormorant Garamond',serif",fontSize:15,lineHeight:1.5}}>"{goalComments[g.member_id]}"</div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1006,6 +1019,91 @@ function MemberView({ session, onExit }) {
         {/* GOAL TAB */}
         {activeTab==="goal"&&<GoalSection member={member} groupId={group.id}/>}
       </div>
+    </div>
+  );
+}
+
+// ─── GoalCommentsPanel (Guardiana) ────────────────────────
+function GoalCommentsPanel({ memberStats, groupId }) {
+  const [comments, setComments] = useState({});   // member_id -> text
+  const [editing, setEditing]   = useState(null); // member_id being edited
+  const [draft, setDraft]       = useState("");
+
+  const loadComments = useCallback(async () => {
+    const ids = memberStats.map(s => s.member.id);
+    const { data } = await supabase.from("goal_comments").select("*").in("member_id", ids);
+    if (data) {
+      const map = {};
+      data.forEach(c => { map[c.member_id] = c.comment_text; });
+      setComments(map);
+    }
+  }, [memberStats]);
+
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  const saveComment = async (memberId) => {
+    const existing = await supabase.from("goal_comments").select("id").eq("member_id", memberId).single();
+    if (existing.data) {
+      await supabase.from("goal_comments").update({ comment_text: draft }).eq("id", existing.data.id);
+    } else {
+      await supabase.from("goal_comments").insert({ member_id: memberId, group_id: groupId, comment_text: draft });
+    }
+    setEditing(null); setDraft(""); loadComments();
+  };
+
+  const defined = memberStats.filter(s => s.hasGoal).length;
+
+  return (
+    <div>
+      <div style={{marginBottom:20,fontSize:11,color:"rgba(30,20,8,0.45)"}}>
+        {defined}/{memberStats.length} alumnas han definido su objetivo
+      </div>
+      {memberStats.map(s => (
+        <div key={s.member.id} style={{background:"#fff",border:`1px solid ${s.hasGoal?"rgba(184,150,12,0.2)":"rgba(192,57,43,0.2)"}`,padding:"18px 20px",marginBottom:8}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:s.hasGoal?10:0}}>
+            <div style={{width:28,height:28,border:`1px solid ${s.hasGoal?"#B8960C":"#C0392B"}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:s.hasGoal?"#B8960C":"#C0392B",flexShrink:0}}>{s.member.name[0]}</div>
+            <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#1E1408",flex:1}}>{s.member.name}</span>
+            {!s.hasGoal && <span style={{fontSize:9,letterSpacing:1.5,color:"#C0392B",background:"rgba(192,57,43,0.08)",padding:"2px 7px",fontFamily:"'Montserrat',sans-serif",textTransform:"uppercase"}}>Sin definir</span>}
+            {s.hasGoal && (
+              <button className="icon-btn edit" style={{fontSize:10,padding:"5px 10px"}}
+                onClick={()=>{ setEditing(s.member.id); setDraft(comments[s.member.id]||""); }}>
+                💬 {comments[s.member.id] ? "Editar nota" : "Añadir nota"}
+              </button>
+            )}
+          </div>
+
+          {/* Goal text */}
+          {s.hasGoal && (
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",fontStyle:"italic",lineHeight:1.6,paddingLeft:38,marginBottom:comments[s.member.id]||editing===s.member.id?10:0}}>
+              "{s.goal}"
+            </div>
+          )}
+
+          {/* Existing comment */}
+          {comments[s.member.id] && editing !== s.member.id && (
+            <div style={{paddingLeft:38,paddingTop:8,borderTop:"1px solid rgba(184,150,12,0.1)",marginTop:8}}>
+              <div style={{fontSize:9,letterSpacing:2,color:"rgba(30,20,8,0.35)",textTransform:"uppercase",fontFamily:"'Montserrat',sans-serif",marginBottom:4}}>Tu nota</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:"rgba(30,20,8,0.6)",fontStyle:"italic",lineHeight:1.5}}>"{comments[s.member.id]}"</div>
+            </div>
+          )}
+
+          {/* Edit comment input */}
+          {editing === s.member.id && (
+            <div style={{paddingLeft:38,paddingTop:8,borderTop:"1px solid rgba(184,150,12,0.1)",marginTop:8}}>
+              <div className="comment-input-row">
+                <input className="comment-input"
+                  placeholder="Escribe una nota sobre el objetivo de esta alumna..."
+                  value={draft} onChange={e=>setDraft(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&saveComment(s.member.id)}
+                  autoFocus/>
+                <button className="comment-send-btn" onClick={()=>saveComment(s.member.id)}>Guardar</button>
+                <button onClick={()=>setEditing(null)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(30,20,8,0.4)",fontSize:16,padding:"0 6px"}}>✕</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1320,25 +1418,7 @@ function GuardianaView({ session, onExit }) {
 
         {/* ── TAB: OBJETIVOS ── */}
         {!loading&&activeTab==="objetivos"&&(
-          <div>
-            <div style={{marginBottom:20,fontSize:11,color:"rgba(30,20,8,0.45)"}}>
-              {goals.filter(g=>g.goal_text).length}/{members.length} alumnas han definido su objetivo
-            </div>
-            {memberStats.map(s=>(
-              <div key={s.member.id} style={{background:"#fff",border:`1px solid ${s.hasGoal?"rgba(184,150,12,0.2)":"rgba(192,57,43,0.2)"}`,padding:"18px 20px",marginBottom:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:s.hasGoal?10:0}}>
-                  <div style={{width:28,height:28,border:`1px solid ${s.hasGoal?"#B8960C":"#C0392B"}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:s.hasGoal?"#B8960C":"#C0392B",flexShrink:0}}>{s.member.name[0]}</div>
-                  <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#1E1408"}}>{s.member.name}</span>
-                  {!s.hasGoal&&<span style={{fontSize:9,letterSpacing:1.5,color:"#C0392B",background:"rgba(192,57,43,0.08)",padding:"2px 7px",fontFamily:"'Montserrat',sans-serif",textTransform:"uppercase"}}>Sin definir</span>}
-                </div>
-                {s.hasGoal&&(
-                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",fontStyle:"italic",lineHeight:1.6,paddingLeft:38}}>
-                    "{s.goal}"
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <GoalCommentsPanel memberStats={memberStats} groupId={group.id} />
         )}
 
         {/* ── TAB: RACHAS ── */}
