@@ -691,6 +691,13 @@ function GoalSection({ member, groupId }) {
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
           <div style={{width:32,height:32,border:"1px solid #B8960C",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#B8960C",flexShrink:0}}>{member.name[0]}</div>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#1E1408"}}>{member.name}</div>
+          {/* Notification badge if guardiana left a comment */}
+          {goalComments[member.id] && (
+            <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(184,150,12,0.1)",border:"1px solid rgba(184,150,12,0.4)",padding:"3px 10px"}}>
+              <span style={{fontSize:11}}>💬</span>
+              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:1.5,color:"#B8960C",textTransform:"uppercase"}}>Tu guardiana te ha dejado una nota</span>
+            </div>
+          )}
           <div style={{flex:1,height:1,background:"linear-gradient(90deg,rgba(184,150,12,0.3),transparent)"}}/>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:"rgba(184,150,12,0.6)",letterSpacing:3}}>✦</div>
         </div>
@@ -722,6 +729,19 @@ function GoalSection({ member, groupId }) {
               <button className="gold-btn" onClick={save}>Guardar mi objetivo ✦</button>
             </div>
           </>
+        )}
+
+        {/* Guardiana comment on MY goal */}
+        {goalComments[member.id] && (
+          <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid rgba(184,150,12,0.15)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <span style={{fontSize:14}}>💬</span>
+              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,letterSpacing:2,color:"#B8960C",textTransform:"uppercase"}}>Nota de tu guardiana</span>
+            </div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#1E1408",fontStyle:"italic",lineHeight:1.6,paddingLeft:22}}>
+              "{goalComments[member.id]}"
+            </div>
+          </div>
         )}
       </div>
 
@@ -870,6 +890,23 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+// ─── GoalNotificationDot ─────────────────────────────────
+function GoalNotificationDot({ memberId }) {
+  const [hasComment, setHasComment] = useState(false);
+  useEffect(() => {
+    supabase.from("goal_comments").select("id").eq("member_id", memberId).single()
+      .then(({ data }) => { if (data) setHasComment(true); });
+  }, [memberId]);
+  if (!hasComment) return null;
+  return (
+    <span style={{
+      display:"inline-block", width:8, height:8, borderRadius:"50%",
+      background:"#C0392B", flexShrink:0,
+      animation:"pulse 2s infinite"
+    }}/>
+  );
+}
+
 // ─── MEMBER VIEW ──────────────────────────────────────
 function MemberView({ session, onExit }) {
   const { group, member } = session;
@@ -941,8 +978,10 @@ function MemberView({ session, onExit }) {
           <button className={`mtab${activeTab==="actions"?" active":""}`} onClick={()=>setActiveTab("actions")}>
             Mis acciones de Manifestadora Experta
           </button>
-          <button className={`mtab${activeTab==="goal"?" active":""}`} onClick={()=>setActiveTab("goal")}>
+          <button className={`mtab${activeTab==="goal"?" active":""}`} onClick={()=>setActiveTab("goal")}
+            style={{position:"relative",display:"flex",alignItems:"center",gap:6}}>
             Mi objetivo ✦
+            <GoalNotificationDot memberId={member.id}/>
           </button>
         </div>
 
