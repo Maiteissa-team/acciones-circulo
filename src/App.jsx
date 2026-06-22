@@ -10,12 +10,11 @@ const supabase       = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ─── helpers ────────────────────────────────────────────
 function getWeekLabel(dateStr) {
   if (!dateStr) return "Sin fecha";
-  const d = new Date(dateStr + "T12:00:00"); // noon to avoid timezone shifts
-  // Get Monday of the week (ISO: Mon=1...Sun=7)
+  const d = new Date(dateStr + "T12:00:00");
   const startOfWeek = (dt) => {
     const d2 = new Date(dt);
-    const day = d2.getDay(); // 0=Sun,1=Mon,...,6=Sat
-    const diffToMon = day === 0 ? -6 : 1 - day; // Sun goes back 6, others go back to Mon
+    const day = d2.getDay();
+    const diffToMon = day === 0 ? -6 : 1 - day;
     d2.setDate(d2.getDate() + diffToMon);
     d2.setHours(0,0,0,0);
     return d2;
@@ -26,8 +25,8 @@ function getWeekLabel(dateStr) {
   if (diff === 0) return "Esta semana";
   if (diff === -1) return "Semana pasada";
   if (diff === 1) return "Próxima semana";
-  const months = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-  return `Semana del ${dw.getDate()} ${months[dw.getMonth()]}`;
+  if (diff < -1) return "Semanas pasadas";
+  return "Próximas semanas";
 }
 function daysSince(isoStr) { if (!isoStr) return 999; return Math.floor((Date.now()-new Date(isoStr).getTime())/(1000*3600*24)); }
 function isOverdue(dateStr, completed) { if (completed||!dateStr) return false; return new Date(dateStr)<new Date(new Date().toDateString()); }
