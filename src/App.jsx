@@ -16,7 +16,7 @@ function getWeekLabel(dateStr) {
   const diff = Math.round((dw-sw)/(7*24*3600*1000));
   if (diff===0) return "Esta semana"; if (diff===-1) return "Semana pasada"; if (diff===1) return "Próxima semana";
   const months=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-  return `Semana del ${d.getDate()} ${months[d.getMonth()]}`;
+  return `Semana del ${dw.getDate()} ${months[dw.getMonth()]}`;
 }
 function daysSince(isoStr) { if (!isoStr) return 999; return Math.floor((Date.now()-new Date(isoStr).getTime())/(1000*3600*24)); }
 function isOverdue(dateStr, completed) { if (completed||!dateStr) return false; return new Date(dateStr)<new Date(new Date().toDateString()); }
