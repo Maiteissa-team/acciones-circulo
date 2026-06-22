@@ -10,12 +10,23 @@ const supabase       = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ─── helpers ────────────────────────────────────────────
 function getWeekLabel(dateStr) {
   if (!dateStr) return "Sin fecha";
-  const d = new Date(dateStr);
-  const startOfWeek = (dt) => { const d2=new Date(dt); d2.setDate(d2.getDate()-d2.getDay()+1); d2.setHours(0,0,0,0); return d2; };
-  const sw = startOfWeek(new Date()); const dw = startOfWeek(d);
-  const diff = Math.round((dw-sw)/(7*24*3600*1000));
-  if (diff===0) return "Esta semana"; if (diff===-1) return "Semana pasada"; if (diff===1) return "Próxima semana";
-  const months=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const d = new Date(dateStr + "T12:00:00"); // noon to avoid timezone shifts
+  // Get Monday of the week (ISO: Mon=1...Sun=7)
+  const startOfWeek = (dt) => {
+    const d2 = new Date(dt);
+    const day = d2.getDay(); // 0=Sun,1=Mon,...,6=Sat
+    const diffToMon = day === 0 ? -6 : 1 - day; // Sun goes back 6, others go back to Mon
+    d2.setDate(d2.getDate() + diffToMon);
+    d2.setHours(0,0,0,0);
+    return d2;
+  };
+  const sw = startOfWeek(new Date());
+  const dw = startOfWeek(d);
+  const diff = Math.round((dw - sw) / (7*24*3600*1000));
+  if (diff === 0) return "Esta semana";
+  if (diff === -1) return "Semana pasada";
+  if (diff === 1) return "Próxima semana";
+  const months = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
   return `Semana del ${dw.getDate()} ${months[dw.getMonth()]}`;
 }
 function daysSince(isoStr) { if (!isoStr) return 999; return Math.floor((Date.now()-new Date(isoStr).getTime())/(1000*3600*24)); }
