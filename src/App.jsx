@@ -1222,7 +1222,13 @@ function GuardianaView({ session, onExit }) {
 
   // Derived data
   const lastActionDate = {};
-  actions.forEach(a => { if (!lastActionDate[a.member_id] || new Date(a.created_at) > new Date(lastActionDate[a.member_id])) lastActionDate[a.member_id] = a.created_at; });
+  actions.forEach(a => {
+    // Consider both when the action was created AND when it was completed
+    const dates = [a.created_at, a.completed_at].filter(Boolean);
+    const latest = dates.reduce((max, d) => new Date(d) > new Date(max) ? d : max);
+    if (!lastActionDate[a.member_id] || new Date(latest) > new Date(lastActionDate[a.member_id]))
+      lastActionDate[a.member_id] = latest;
+  });
 
   const totalDone    = actions.filter(a=>a.completed).length;
   const overdueTotal = actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
