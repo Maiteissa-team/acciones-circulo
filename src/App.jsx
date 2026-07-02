@@ -1072,11 +1072,13 @@ function MemberView({ session, onExit }) {
   );
 }
 
-// ─── GoalCommentsPanel (Guardiana) ────────────────────────
+// ─── GoalCommentsPanel (Guardiana) ────────────────────
 function GoalCommentsPanel({ memberStats, groupId }) {
-  const [comments, setComments] = useState({});   // member_id -> text
-  const [editing, setEditing]   = useState(null); // member_id being edited
+  const [comments, setComments] = useState({});
+  const [editing, setEditing]   = useState(null);
   const [draft, setDraft]       = useState("");
+  const [search, setSearch]     = useState("");
+  const [filter, setFilter]     = useState("all");
 
   const loadComments = useCallback(async () => {
     const ids = memberStats.map(s => s.member.id);
@@ -1101,13 +1103,33 @@ function GoalCommentsPanel({ memberStats, groupId }) {
   };
 
   const defined = memberStats.filter(s => s.hasGoal).length;
+  const sorted = [...memberStats].sort((a,b) => a.member.name.localeCompare(b.member.name, "es"));
+  const filtered = sorted.filter(s => {
+    if (filter === "defined" && !s.hasGoal) return false;
+    if (filter === "undefined" && s.hasGoal) return false;
+    if (search && !s.member.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div>
-      <div style={{marginBottom:20,fontSize:11,color:"rgba(30,20,8,0.45)"}}>
-        {defined}/{memberStats.length} alumnas han definido su objetivo
+      <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{position:"relative",flex:1,minWidth:180}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Buscar alumna..."
+            style={{width:"100%",padding:"8px 12px 8px 32px",background:"#fff",border:"1px solid rgba(184,150,12,0.3)",color:"#1E1408",fontFamily:"'Montserrat',sans-serif",fontSize:12,outline:"none"}}/>
+          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"rgba(30,20,8,0.35)",fontSize:13}}>&#128269;</span>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {[["all","Todas ("+memberStats.length+")"],["defined","Con objetivo ("+defined+")"],["undefined","Sin definir ("+(memberStats.length-defined)+")"]].map(([id,label])=>(
+            <button key={id} className={"ftab"+(filter===id?" active":"")} onClick={()=>setFilter(id)} style={{fontSize:9,padding:"5px 12px"}}>{label}</button>
+          ))}
+        </div>
       </div>
-      {memberStats.map(s => (
+      <div style={{fontSize:11,color:"rgba(30,20,8,0.35)",marginBottom:12,fontFamily:"'Montserrat',sans-serif",letterSpacing:0.5}}>
+        {filtered.length} resultado{filtered.length!==1?"s":""} · orden alfabético
+      </div>
+      {filtered.map(s => (
         <div key={s.member.id} style={{background:"#fff",border:`1px solid ${s.hasGoal?"rgba(184,150,12,0.2)":"rgba(192,57,43,0.2)"}`,padding:"18px 20px",marginBottom:8}}>
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:s.hasGoal?10:0}}>
