@@ -29,7 +29,15 @@ function getWeekLabel(dateStr) {
   return "Próximas semanas";
 }
 function daysSince(isoStr) { if (!isoStr) return 999; return Math.floor((Date.now()-new Date(isoStr).getTime())/(1000*3600*24)); }
-function isOverdue(dateStr, completed) { if (completed||!dateStr) return false; return new Date(dateStr)<new Date(new Date().toDateString()); }
+function isOverdue(dateStr, completed) {
+  if (completed || !dateStr) return false;
+  // Compare using local timezone: get today's date as YYYY-MM-DD in the user's local time
+  const now = new Date();
+  const localToday = now.getFullYear() + "-" +
+    String(now.getMonth()+1).padStart(2,"0") + "-" +
+    String(now.getDate()).padStart(2,"0");
+  return dateStr < localToday;
+}
 function streak(actions) {
   if (!actions.length) return 0;
   const startOfWeek=(dt)=>{const d=new Date(dt);d.setDate(d.getDate()-d.getDay()+1);d.setHours(0,0,0,0);return d.getTime();};
