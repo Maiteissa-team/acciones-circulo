@@ -975,6 +975,7 @@ function MemberView({ session, onExit }) {
 
   const displayed = filter==="all"?actions
     :filter==="mine"?myActions
+    :filter==="mine_pending"?myActions.filter(a=>!a.completed)
     :filter==="pending"?actions.filter(a=>!a.completed)
     :filter==="overdue"?actions.filter(a=>isOverdue(a.action_date,a.completed))
     :actions.filter(a=>a.completed);
@@ -1044,7 +1045,7 @@ function MemberView({ session, onExit }) {
 
             {/* Filter + view toggle */}
             <div className="filter-row">
-              {[["all","Todas"],["mine","Las mías"],["pending","Pendientes"],["done","Completadas"],["overdue","Fuera de plazo"]].map(([id,label])=>(
+              {[["all","Todas"],["mine","Las mías"],["mine_pending","Mis pendientes"],["pending","Pendientes"],["done","Completadas"],["overdue","Fuera de plazo"]].map(([id,label])=>(
                 <button key={id} className={`ftab${filter===id?" active":""}`} onClick={()=>setFilter(id)}>{label}</button>
               ))}
               <div style={{marginLeft:"auto"}}>
