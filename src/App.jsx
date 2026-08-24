@@ -951,7 +951,7 @@ function MemberView({ session, onExit }) {
 
   const loadActions = useCallback(async () => {
     const { data } = await supabase.from("actions").select("*")
-      .eq("group_id", group.id).order("created_at", { ascending:false });
+      .eq("group_id", group.id).order("created_at", { ascending:false }).limit(2000);
     if (data) setActions(data); setLoading(false);
   }, [group.id]);
 
@@ -1223,7 +1223,7 @@ function GuardianaView({ session, onExit }) {
 
   const loadAll = useCallback(async () => {
     const [{ data:a },{ data:m },{ data:g },{ data:n },{ data:ag },{ data:am },{ data:aa }] = await Promise.all([
-      supabase.from("actions").select("*").eq("group_id", group.id).order("created_at", { ascending:true }),
+      supabase.from("actions").select("*").eq("group_id", group.id).order("created_at", { ascending:true }).limit(2000),
       supabase.from("members").select("*").eq("group_id", group.id).order("name"),
       supabase.from("member_goals").select("*, members(name)").in("member_id",
         (await supabase.from("members").select("id").eq("group_id", group.id)).data?.map(x=>x.id) || []
@@ -1232,7 +1232,7 @@ function GuardianaView({ session, onExit }) {
       // All groups for team view
       supabase.from("groups").select("*").order("name"),
       supabase.from("members").select("*"),
-      supabase.from("actions").select("*"),
+      supabase.from("actions").select("*").limit(5000),
     ]);
     if (a) setActions(a);
     if (m) { setMembers(m); const exp={}; m.forEach(mb=>{exp[mb.id]=true;}); setExpandedMembers(exp); }
