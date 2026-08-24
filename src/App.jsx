@@ -1223,7 +1223,7 @@ function GuardianaView({ session, onExit }) {
 
   const loadAll = useCallback(async () => {
     const [{ data:a },{ data:m },{ data:g },{ data:n },{ data:ag },{ data:am },{ data:aa }] = await Promise.all([
-      supabase.from("actions").select("*").eq("group_id", group.id).order("action_date", { ascending:true }),
+      supabase.from("actions").select("*").eq("group_id", group.id).order("created_at", { ascending:true }),
       supabase.from("members").select("*").eq("group_id", group.id).order("name"),
       supabase.from("member_goals").select("*, members(name)").in("member_id",
         (await supabase.from("members").select("id").eq("group_id", group.id)).data?.map(x=>x.id) || []
@@ -1246,8 +1246,8 @@ function GuardianaView({ session, onExit }) {
 
   useEffect(() => {
     loadAll();
-    const sub = supabase.channel(`guard-${group.id}`)
-      .on("postgres_changes", {event:"*",schema:"public",table:"actions",filter:`group_id=eq.${group.id}`}, loadAll)
+    const sub = supabase.channel(`guard-${group.id}-${Date.now()}`)
+      .on("postgres_changes", {event:"*",schema:"public",table:"actions",filter:`group_id=eq.${group.id}`}, () => loadAll())
       .subscribe();
     return () => supabase.removeChannel(sub);
   }, [loadAll]);
@@ -1275,10 +1275,8 @@ function GuardianaView({ session, onExit }) {
   const totalDone    = actions.filter(a=>a.completed).length;
   const overdueTotal = actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
   const inactiveCount = members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).length;
-  // Group weeks by action_date (deadline) — always show Esta semana and Semana pasada
-  const dataWeeks = new Set(actions.map(a=>getWeekLabel(a.action_date)));
-  const fixedWeeks = ["Semanas pasadas","Semana pasada","Esta semana","Próxima semana","Próximas semanas"];
-  const allWeeks = fixedWeeks.filter(w=>dataWeeks.has(w)||["Esta semana","Semana pasada"].includes(w));
+  // Always show all week filter options
+  const allWeeks = ["Semanas pasadas","Semana pasada","Esta semana","Próxima semana","Próximas semanas"];
 
   // Member stats for summary tab
   const memberStats = members.map(m => {
