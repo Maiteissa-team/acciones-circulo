@@ -1275,11 +1275,10 @@ function GuardianaView({ session, onExit }) {
   const totalDone    = actions.filter(a=>a.completed).length;
   const overdueTotal = actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
   const inactiveCount = members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).length;
-  // Always show fixed week options + any extra weeks from data
-  const dataWeeks = new Set(actions.map(a=>getWeekLabel(a.created_at?.split("T")[0]||a.action_date)));
+  // Group weeks by action_date (deadline) — always show Esta semana and Semana pasada
+  const dataWeeks = new Set(actions.map(a=>getWeekLabel(a.action_date)));
   const fixedWeeks = ["Semanas pasadas","Semana pasada","Esta semana","Próxima semana","Próximas semanas"];
-  const extraWeeks = [...dataWeeks].filter(w=>!fixedWeeks.includes(w));
-  const allWeeks = [...fixedWeeks.filter(w=>dataWeeks.has(w)||["Esta semana","Semana pasada"].includes(w)), ...extraWeeks];
+  const allWeeks = fixedWeeks.filter(w=>dataWeeks.has(w)||["Esta semana","Semana pasada"].includes(w));
 
   // Member stats for summary tab
   const memberStats = members.map(m => {
@@ -1307,7 +1306,7 @@ function GuardianaView({ session, onExit }) {
   if (filter==="pending")  filteredActions = filteredActions.filter(a=>!a.completed);
   if (filter==="done")     filteredActions = filteredActions.filter(a=>a.completed);
   if (filter==="overdue")  filteredActions = filteredActions.filter(a=>isOverdue(a.action_date,a.completed));
-  if (weekFilter!=="all")  filteredActions = filteredActions.filter(a=>getWeekLabel(a.created_at?.split("T")[0]||a.action_date)===weekFilter);
+  if (weekFilter!=="all") filteredActions = filteredActions.filter(a=>getWeekLabel(a.action_date)===weekFilter);
   if (memberFilter!=="all") filteredActions = filteredActions.filter(a=>String(a.member_id)===String(memberFilter));
 
   const byMember = {};
@@ -1319,7 +1318,7 @@ function GuardianaView({ session, onExit }) {
     members.forEach(m => { if (!byMember[m.id]) byMember[m.id]={member:m,actions:[]}; });
   }
 
-  const groupByWeek = acts => { const map={}; acts.forEach(a=>{const w=getWeekLabel(a.created_at?.split("T")[0]||a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
+  const groupByWeek = acts => { const map={}; acts.forEach(a=>{const w=getWeekLabel(a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
 
   return (
     <div className="app">
