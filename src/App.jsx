@@ -29,6 +29,17 @@ function getWeekLabel(dateStr) {
   return "Próximas semanas";
 }
 function daysSince(isoStr) { if (!isoStr) return 999; return Math.floor((Date.now()-new Date(isoStr).getTime())/(1000*3600*24)); }
+function isThisWeek(isoStr) {
+  if (!isoStr) return false;
+  const d = new Date(isoStr);
+  const now = new Date();
+  const startOfWeek = (dt) => {
+    const d2 = new Date(dt); const day = d2.getDay();
+    d2.setDate(d2.getDate() + (day === 0 ? -6 : 1 - day));
+    d2.setHours(0,0,0,0); return d2;
+  };
+  return startOfWeek(d).getTime() === startOfWeek(now).getTime();
+}
 function isOverdue(dateStr, completed) {
   if (completed || !dateStr) return false;
   // Compare using local timezone: get today's date as YYYY-MM-DD in the user's local time
@@ -1264,14 +1275,17 @@ function GuardianaView({ session, onExit }) {
   const totalDone    = actions.filter(a=>a.completed).length;
   const overdueTotal = actions.filter(a=>isOverdue(a.action_date,a.completed)).length;
   const inactiveCount = members.filter(m=>!lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7).length;
-  const allWeeks = [...new Set(actions.map(a=>getWeekLabel(a.action_date)))];
+  // Always show fixed week options + any extra weeks from data
+  const dataWeeks = new Set(actions.map(a=>getWeekLabel(a.created_at?.split("T")[0]||a.action_date)));
+  const fixedWeeks = ["Semanas pasadas","Semana pasada","Esta semana","Próxima semana","Próximas semanas"];
+  const extraWeeks = [...dataWeeks].filter(w=>!fixedWeeks.includes(w));
+  const allWeeks = [...fixedWeeks.filter(w=>dataWeeks.has(w)||["Esta semana","Semana pasada"].includes(w)), ...extraWeeks];
 
   // Member stats for summary tab
   const memberStats = members.map(m => {
     const mActions = actions.filter(a=>a.member_id===m.id);
     const mDone = mActions.filter(a=>a.completed).length;
-    const mThisWeek = mActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana"||
-      (a.completed&&a.completed_at&&getWeekLabel(a.completed_at.split("T")[0])==="Esta semana"));
+    const mThisWeek = mActions.filter(a=>isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at)));
     const mStreak = streak(mActions);
     const mGoal = goals.find(g=>g.member_id===m.id);
     const mInactive = !lastActionDate[m.id]||daysSince(lastActionDate[m.id])>7;
@@ -1293,7 +1307,7 @@ function GuardianaView({ session, onExit }) {
   if (filter==="pending")  filteredActions = filteredActions.filter(a=>!a.completed);
   if (filter==="done")     filteredActions = filteredActions.filter(a=>a.completed);
   if (filter==="overdue")  filteredActions = filteredActions.filter(a=>isOverdue(a.action_date,a.completed));
-  if (weekFilter!=="all")  filteredActions = filteredActions.filter(a=>getWeekLabel(a.action_date)===weekFilter);
+  if (weekFilter!=="all")  filteredActions = filteredActions.filter(a=>getWeekLabel(a.created_at?.split("T")[0]||a.action_date)===weekFilter);
   if (memberFilter!=="all") filteredActions = filteredActions.filter(a=>String(a.member_id)===String(memberFilter));
 
   const byMember = {};
@@ -1305,7 +1319,7 @@ function GuardianaView({ session, onExit }) {
     members.forEach(m => { if (!byMember[m.id]) byMember[m.id]={member:m,actions:[]}; });
   }
 
-  const groupByWeek = acts => { const map={}; acts.forEach(a=>{const w=getWeekLabel(a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
+  const groupByWeek = acts => { const map={}; acts.forEach(a=>{const w=getWeekLabel(a.created_at?.split("T")[0]||a.action_date);if(!map[w])map[w]=[];map[w].push(a);}); return map; };
 
   return (
     <div className="app">
@@ -1557,7 +1571,7 @@ function GuardianaView({ session, onExit }) {
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
               {[
                 [allMembers.length,"Alumnas en total"],
-                [allActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana").length,"Acciones esta semana"],
+                [allActions.filter(a=>isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at))).length,"Acciones esta semana"],
                 [allActions.filter(a=>a.completed).length,"Completadas en total"],
               ].map(([num,label])=>(
                 <div key={label} style={{background:"#0A0A0A",padding:"18px 14px",textAlign:"center"}}>
@@ -1573,14 +1587,14 @@ function GuardianaView({ session, onExit }) {
               const gMembers = allMembers.filter(m=>m.group_id===g.id);
               const gActions = allActions.filter(a=>a.group_id===g.id);
               const gDone = gActions.filter(a=>a.completed).length;
-              const gThisWeek = gActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana"||(a.completed&&a.completed_at&&getWeekLabel(a.completed_at.split("T")[0])==="Esta semana"));
+              const gThisWeek = gActions.filter(a=>isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at)));
               const gActive = gMembers.filter(m=>{
                 const last = gActions.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
                 return last && daysSince(last.created_at)<=7;
               }).length;
               const activePct = gMembers.length>0 ? Math.round(gActive/gMembers.length*100) : 0;
               const donePct = gActions.length>0 ? Math.round(gDone/gActions.length*100) : 0;
-              const maxThisWeek = Math.max(...allGroups.map(gg => allActions.filter(a=>a.group_id===gg.id&&(getWeekLabel(a.action_date)==="Esta semana"||(a.completed&&a.completed_at&&getWeekLabel(a.completed_at.split("T")[0])==="Esta semana"))).length), 1);
+              const maxThisWeek = Math.max(...allGroups.map(gg => allActions.filter(a=>a.group_id===gg.id&&(isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at)))).length), 1);
               const weekPct = Math.round(gThisWeek.length/maxThisWeek*100);
 
               return (
@@ -1687,8 +1701,11 @@ function AdminView({ session, onExit }) {
     }).eq("id", editingGroup.id);
     setEditingGroup(null); load();
   };
-  const thisWeekActions=allActions.filter(a=>getWeekLabel(a.action_date)==="Esta semana");
-  const globalActive=members.filter(m=>{ const last=allActions.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]; return last&&daysSince(last.created_at)<=7; }).length;
+  const thisWeekActions=allActions.filter(a=>isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at)));
+  const globalActive=members.filter(m=>{
+    const mActs=allActions.filter(a=>a.member_id===m.id);
+    return mActs.some(a=>isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at)));
+  }).length;
 
   return (
     <div className="app">
@@ -1709,7 +1726,7 @@ function AdminView({ session, onExit }) {
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1E1408",marginBottom:12,borderBottom:"1px solid rgba(184,150,12,0.2)",paddingBottom:8}}>Resumen por grupo</div>
         {groups.map(g=>{
           const gm=getMembersForGroup(g.id); const ga=getActionsForGroup(g.id);
-          const gThisWeek=ga.filter(a=>getWeekLabel(a.action_date)==="Esta semana");
+          const gThisWeek=ga.filter(a=>isThisWeek(a.created_at)||(a.completed&&a.completed_at&&isThisWeek(a.completed_at)));
           const gActive=gm.filter(m=>{ const last=ga.filter(a=>a.member_id===m.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]; return last&&daysSince(last.created_at)<=7; }).length;
           const pct=gm.length>0?Math.round(gActive/gm.length*100):0;
           return (
